@@ -18,7 +18,7 @@ function office() {
   git(origin, 'init', '--bare', '-b', 'main');
   git(root, 'clone', origin, src);
   writeFileSync(path.join(src, 'package.json'), '{"name":"agent-office"}\n');
-  writeFileSync(path.join(src, '.gitignore'), 'node_modules\ndist\ndist.prev\n');
+  writeFileSync(path.join(src, '.gitignore'), readFileSync(new URL('../.gitignore', import.meta.url), 'utf8'));
   writeFileSync(path.join(src, 'app.txt'), 'one\n');
   git(src, 'add', '-A');
   git(src, 'commit', '-m', 'first');
@@ -113,6 +113,23 @@ test('the big button commits what is left, checks, updates and pushes the live c
   assert.equal(readFileSync(path.join(o.src, 'dist', 'public', 'built.txt'), 'utf8'), 'two\n', 'the new build is in');
   assert.equal(readFileSync(path.join(o.src, 'dist.prev', 'public', 'built.txt'), 'utf8'), 'old', 'the old one is kept');
   assert.deepEqual(k.state.changes, [], 'and the stack is empty');
+});
+
+test('a retained build backup leaves the live checkout clean and allows another shipment', async () => {
+  const o = office();
+  const { k, restarts } = keeper(o, { supervised: false });
+  await k.prepare();
+  for (const version of ['two', 'three']) {
+    writeFileSync(path.join(k.dir!, 'app.txt'), `${version}\n`);
+    git(k.dir!, 'commit', '-am', `Change app to ${version}`);
+    assert.equal(await k.ship('Alex'), undefined);
+    const s = await settled(k);
+    assert.equal(s.phase, 'idle', s.error);
+    assert.equal(git(o.src, 'status', '--porcelain'), '', 'the backup is ignored');
+    assert.equal(readFileSync(path.join(o.src, 'dist', 'public', 'built.txt'), 'utf8'), `${version}\n`);
+  }
+  assert.equal(readFileSync(path.join(o.src, 'dist.prev', 'public', 'built.txt'), 'utf8'), 'two\n');
+  assert.deepEqual(restarts, []);
 });
 
 test('a failing check stops the shipment with the live checkout, its build and origin as they were', async () => {

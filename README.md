@@ -353,6 +353,8 @@ Server edits restart the server, not the workers. After changing `ptyhost.ts`, b
 
 Every change to the app that lands on `main` is published as a GitHub release by [`.github/workflows/release.yml`](.github/workflows/release.yml), and `install.sh` installs the newest one. Bump `package.json`'s version to start a new minor.
 
+Maintenance shipments keep the previous build in `dist.prev/`. Like `dist/`, this generated backup is ignored by Git so repeated shipments can pass the clean-checkout check. See [how the maintenance stack works](docs/how-it-works.md).
+
 ## More
 
 - [Features](docs/features.md): everything in the office, room by room
