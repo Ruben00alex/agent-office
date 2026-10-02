@@ -14,8 +14,8 @@ import { maintenanceJson } from '../ui/maintenance-board';
 import { imageComposer, imageEvidence } from '../ui/maintenance-images';
 import { openMaintenanceIssueCreate, workPanel } from '../ui/maintenance-work';
 import { renderDiff } from '../ui/changes';
-import { go, live, type Screen } from './app';
-import { actions, button, empty, fill, heading, layout, note, page, row, segmented, textarea } from './kit';
+import { go, live, setSubtitle, type Screen } from './app';
+import { actions, button, empty, fill, heading, iconButton, layout, note, openSheet, page, row, searchBox, segmented, textarea } from './kit';
 import { net, onServerMessage, openWorker } from './ctx';
 
 const on = store.on.bind(store);
@@ -118,17 +118,21 @@ interface ChatConfig {
 }
 
 const CONFIG: Record<'product' | 'maintenance', ChatConfig> = {
-  product: { kind: 'product', name: 'Product Lead', endpoint: '/api/product/chat', sendType: 'product.chat.send', sentType: 'product.chat.sent', placeholder: 'What’s on your mind about the project?', emptyTitle: 'What’s on your mind?', emptyText: 'Think out loud about the project, bounce an idea around, or ask how something works. No ticket needed: it’s just a conversation.' },
-  maintenance: { kind: 'maintenance', name: 'Maintenance', endpoint: '/api/maintenance/chat', sendType: 'maintenance.chat.send', sentType: 'maintenance.chat.sent', placeholder: 'Ask Maintenance to build, fix, or explain something…', emptyTitle: 'What should we improve?', emptyText: 'Ask for a feature, report a bug, or follow up on a stacked change. Maintenance works in its own worktree; you review and ship the stack when ready.' },
+  product: { kind: 'product', name: 'Product Lead', endpoint: '/api/product/chat', sendType: 'product.chat.send', sentType: 'product.chat.sent', placeholder: 'Ask the Product Lead…', emptyTitle: 'What’s on your mind?', emptyText: 'Think out loud about the project, bounce an idea around, or ask how something works. No ticket needed: it’s just a conversation.' },
+  maintenance: { kind: 'maintenance', name: 'Maintenance', endpoint: '/api/maintenance/chat', sendType: 'maintenance.chat.send', sentType: 'maintenance.chat.sent', placeholder: 'Ask Maintenance…', emptyTitle: 'What should we improve?', emptyText: 'Ask for a feature, report a bug, or follow up on a stacked change. Maintenance works in its own worktree; you review and ship the stack when ready.' },
 };
 
-function bubble(cfg: ChatConfig, m: MaintenanceChatMessage) {
+/** One message: yours on the right, the agent's on the left; a run of messages from one side shares a header. */
+function bubble(cfg: ChatConfig, m: MaintenanceChatMessage, prev?: MaintenanceChatMessage) {
   const user = m.role === 'user';
+  const first = !prev || prev.role !== m.role || (user && prev.by !== m.by) || m.at - prev.at > 5 * 60_000;
+  const time = new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return h(
-    'article.maintenance-message',
-    { class: user ? 'from-user' : 'from-agent', 'data-message': m.id },
-    h('div.maintenance-message-meta', {}, h('b', {}, user ? (m.by ?? 'You') : cfg.name), h('time', {}, new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })), m.phase === 'commentary' ? h('span', {}, 'Progress') : m.pending ? h('span', {}, 'Accepted · awaiting agent') : null),
-    h('div.maintenance-bubble', {}, user ? h('p.maintenance-user-text', {}, m.content) : maintenanceContent(m.content), m.attachments?.length ? imageEvidence(m.attachments) : null),
+    'article.lp-msg',
+    { class: `${user ? 'from-user' : 'from-agent'}${first ? ' first' : ''}`, 'data-message': m.id },
+    first ? h('div.lp-msg-meta', {}, h('b', {}, user ? (m.by ?? 'You') : cfg.name), h('time', {}, time), m.phase === 'commentary' ? h('span', {}, 'progress') : null) : null,
+    h('div.lp-bubble', {}, user ? h('p.maintenance-user-text', {}, m.content) : maintenanceContent(m.content), m.attachments?.length ? imageEvidence(m.attachments) : null),
+    m.pending ? h('small.lp-msg-pending', {}, 'sent · waiting for the agent') : null,
   );
 }
 
@@ -148,7 +152,6 @@ export function agentChatScreen([kind]: string[]): Screen {
   let messages: MaintenanceChatMessage[] = [];
   let messageKey = '';
   let historyFailed = false;
-  let showHistory = false;
   let view: MaintenanceView = maintenance ? maintenanceView : 'chat';
   let pending: { id: string; text: string; attachments: MaintenanceAttachment[]; timer: ReturnType<typeof setTimeout> } | undefined;
   const draftKey = `agent-office.lite-${cfg.kind}-draft`;
@@ -162,28 +165,48 @@ export function agentChatScreen([kind]: string[]): Screen {
   let loadedDraft = '';
   const scope = () => `${floor}:${newConversation ? 'new' : (selected ?? state?.worker?.id ?? 'current')}`;
 
-  const list = h('div.maintenance-chat-messages.lp-chatlog', { role: 'log', 'aria-live': 'polite' });
-  const status = h('p.lp-note.lp-chatstatus', {}, 'Connecting…');
-  const errorEl = h('p.maintenance-chat-error.hidden', { role: 'alert' });
-  const noteEl = h('p.lp-note');
-  const input = h('textarea', { rows: 2, maxlength: 20000, placeholder: cfg.placeholder, 'aria-label': `Message to ${cfg.name}`, enterkeyhint: 'send' }) as HTMLTextAreaElement;
+  const list = h('div.lp-chatlog', { role: 'log', 'aria-live': 'polite' });
+  const typing = h('div.lp-typing.hidden', { 'aria-label': `${cfg.name} is replying` }, h('i'), h('i'), h('i'));
+  const errorEl = h('p.lp-banner.bad.hidden', { role: 'alert' });
+  const banner = h('p.lp-banner.hidden');
+  const input = h('textarea', { rows: 1, maxlength: 20000, placeholder: cfg.placeholder, 'aria-label': `Message to ${cfg.name}`, enterkeyhint: 'send' }) as HTMLTextAreaElement;
   if (carryDraft) {
     input.value = carryDraft;
     carryDraft = '';
   }
-  const images = maintenance ? imageComposer(() => (saveDraft(), controls()), (t) => showError(t)) : null;
+  const grow = () => {
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+  };
+  const images = maintenance ? imageComposer(() => (saveDraft(), tray(), controls()), (t) => showError(t)) : null;
+  const tray = () => images?.element.classList.toggle('hidden', !trayOpen && !images.images.length);
+  let trayOpen = false;
+  images?.element.classList.add('hidden', 'lp-tray');
+  const attach = images ? iconButton('📎', 'Attach screenshots', () => ((trayOpen = !trayOpen), tray()), 'lp-attach') : null;
   const older = button('Load earlier messages', () => messages.length && void refresh(messages[0].id), 'hidden');
-  const sendBtn = h('button.btn.primary', { type: 'submit' }, 'Send') as HTMLButtonElement;
+  const sendBtn = h('button.btn.primary.lp-send', { type: 'submit', 'aria-label': 'Send' }, '➤') as HTMLButtonElement;
   const model = providerPicker(store.project, `lite-${cfg.kind}-provider`, 'Runs on', () => (newConversation || view === 'work' ? undefined : workerChoice(state?.worker)));
   model.element.addEventListener('click', () => setTimeout(controls));
-  const form = h('form.lp-composer', {}, errorEl, input, images?.element ?? null, h('div.lp-composer-row', {}, noteEl, sendBtn));
-  const history = h('div.lp-history.hidden');
+  const form = h('form.lp-compose', {}, attach, input, sendBtn);
   const subview = h('div.lp-subview.hidden');
-  const tools = h('div.lp-actions');
   const tabs = h('div');
-  const frame = layout({ top: [status, tools, tabs], scroll: [history, older, list, subview], bottom: [model.element, form] });
+  const jump = h('button.lp-jump.hidden', { type: 'button', 'aria-label': 'Jump to the latest message', onclick: () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }) }, '↓');
+  const frame = layout({ top: [tabs], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
   const el = frame.el;
   const scroller = frame.scroller;
+  frame.top.classList.add('lp-top-slim');
+  scroller.classList.add('lp-chatscroll');
+  const nearBottom = () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120;
+  scroller.addEventListener('scroll', () => jump.classList.toggle('hidden', nearBottom() || view !== 'chat'), { passive: true });
+  const toBottom = () => requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
+  input.addEventListener('input', grow);
+  // A keyboard sends on Enter; a phone's Enter is a new line, and ➤ sends.
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer: fine)').matches) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
 
   function showError(text: string) {
     errorEl.textContent = text;
@@ -202,6 +225,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     if (loadedDraft === s) return;
     loadedDraft = s;
     if (!input.value || !drafts[s]) input.value = typeof drafts[s] === 'string' ? drafts[s] : input.value;
+    grow();
   };
   const pick = (thread: string | undefined, fresh = false) => {
     saveDraft();
@@ -210,22 +234,43 @@ export function agentChatScreen([kind]: string[]): Screen {
     loadedDraft = '';
     messages = [];
     messageKey = '';
-    showHistory = false;
     showError('');
     paintFrame();
     void refresh();
   };
 
+  /** Everything that isn't the conversation itself lives behind sheets, so the messages get the screen. */
+  function openHistory() {
+    if (!state) return;
+    const active = newConversation ? undefined : (selected ?? state.worker?.id);
+    const search = searchBox('Search conversations', () => paint());
+    const listEl = h('div.sheet-list');
+    const paint = () => {
+      const q = search.value.trim().toLowerCase();
+      const entries = (state?.conversations ?? []).filter((c) => c.title.toLowerCase().includes(q));
+      fill(
+        listEl,
+        row({ icon: '➕', title: 'New conversation', sub: 'A fresh start; the others stay here', onclick: () => (sheet.close(), pick(undefined, true)) }),
+        ...entries.map((c) => row({ icon: active === c.id ? '💬' : '🗨️', title: c.title, sub: `${new Date(c.updatedAt).toLocaleDateString()} · ${c.count} messages`, onclick: () => (sheet.close(), pick(c.id)), cls: active === c.id ? 'on' : '' })),
+        entries.length ? null : h('p.lp-note', {}, q ? 'No matching conversations' : 'Conversations appear here once you start talking.'),
+      );
+    };
+    const sheet = openSheet({ title: 'Conversations', tall: true, body: h('div.sheet-stack', {}, search, listEl) });
+    paint();
+  }
+
+  function openRunsOn() {
+    openSheet({ title: 'Runs on', body: h('div.sheet-stack', {}, model.element, h('p.lp-note', {}, 'Picking another moves it off its current model: it starts afresh there with your next message.')) });
+  }
+
   function paintFrame() {
-    const w = state?.worker;
-    const busy = !!w && !['idle', 'done', 'exited'].includes(w.status);
-    fill(
-      tools,
-      button('🕘 History', () => ((showHistory = !showHistory), paintFrame(), paintHistory())),
-      button('+ New', () => pick(undefined, true)),
-      w && state?.floor ? button('🖥️ Terminal', () => (state!.floor === store.floor ? openWorker(w.id) : switchAndOpen(w.id, state!.floor!))) : null,
-      maintenance && w ? button('⏏️ End session', () => confirmDialog('End Maintenance session?', 'Stops the active session for everyone, including unfinished work. Conversation history, edited files and stacked commits remain.', 'End session', () => net.send({ t: 'worker.kill', workerId: w.id })), 'danger') : null,
-    );
+    const chat = view === 'chat';
+    older.classList.toggle('hidden', !chat || !state?.conversation?.hasOlder);
+    list.classList.toggle('hidden', !chat);
+    typing.classList.toggle('hidden', !chat || !typingNow());
+    subview.classList.toggle('hidden', chat);
+    frame.bottom.classList.toggle('hidden', !chat);
+    if (!chat) jump.classList.add('hidden');
     if (maintenance) {
       fill(
         tabs,
@@ -240,26 +285,13 @@ export function agentChatScreen([kind]: string[]): Screen {
         ),
       );
     }
-    history.classList.toggle('hidden', !showHistory);
-    const chat = view === 'chat';
-    for (const x of [list, form]) x.classList.toggle('hidden', !chat || showHistory);
-    older.classList.toggle('hidden', !chat || showHistory || !state?.conversation?.hasOlder);
-    model.element.classList.toggle('hidden', view === 'review' || showHistory);
-    subview.classList.toggle('hidden', chat || showHistory);
-    frame.bottom.classList.toggle('hidden', !chat || showHistory);
-    void busy;
+    frame.top.classList.toggle('hidden', !maintenance);
   }
 
-  function paintHistory() {
-    if (!showHistory || !state) return;
-    const active = newConversation ? undefined : (selected ?? state.worker?.id);
-    fill(
-      history,
-      ...(state.conversations.length
-        ? state.conversations.map((c) => row({ icon: active === c.id ? '💬' : '🗨️', title: c.title, sub: `${new Date(c.updatedAt).toLocaleDateString()} · ${c.count} messages`, onclick: () => pick(c.id), cls: active === c.id ? 'on' : '' }))
-        : [empty('🗨️', 'No conversations yet', 'They appear here once you start talking.')]),
-    );
-  }
+  const typingNow = () => {
+    const w = state?.worker;
+    return !!w && w.status === 'working' && !newConversation && !(selected && selected !== w.id);
+  };
 
   function controls() {
     const w = state?.worker;
@@ -267,18 +299,27 @@ export function agentChatScreen([kind]: string[]): Screen {
     const archived = !newConversation && !!selected && selected !== w?.id;
     const waiting = w?.status === 'needs_input';
     const busy = !!w && !['idle', 'done', 'exited'].includes(w.status);
-    status.textContent = w ? (w.status === 'working' ? `${cfg.name} is working…` : waiting ? '🙋 Waiting on you' : w.status === 'starting' ? 'Getting settled…' : `${cfg.name} · here${state?.floorName && maintenance ? ` · ${state.floorName}` : ''}`) : maintenance ? 'Ready for your first request' : 'Here whenever you want to talk';
+    // The state of things is the page's subtitle; only what needs saying stands over the composer.
+    if (historyFailed) setSubtitle('Connection unavailable · retrying', 'warn');
+    else if (!w) setSubtitle(maintenance ? 'Ready for your first request' : 'Here whenever you want to talk');
+    else if (waiting) setSubtitle('Waiting on you', 'warn');
+    else if (w.status === 'working') setSubtitle('Working…', 'live');
+    else if (w.status === 'starting') setSubtitle('Getting settled…', 'live');
+    else setSubtitle(`Here${state?.floorName && maintenance ? ` · ${state.floorName}` : ''}`);
     input.disabled = !!pending || archived || !state || historyFailed;
     images?.disable(input.disabled);
     sendBtn.disabled = input.disabled || !!images?.uploading || (waiting && !model.edited()) || (newConversation && busy) || state?.stack?.phase === 'shipping' || state?.stack?.validation?.phase === 'running';
-    noteEl.textContent = newConversation
-      ? busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'A fresh start: earlier conversations stay in History.'
-      : archived ? 'An earlier conversation, read-only. Tap History → the current one to carry on.'
-        : waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal to respond.`
+    const say = newConversation
+      ? busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'New conversation: the earlier ones stay in History.'
+      : archived ? 'An earlier conversation, read-only. Open History to go back to the current one.'
+        : waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯ to respond.`
           : state && !state.richReplies ? 'This provider replies in its terminal; your messages are still kept here.'
-            : busy ? 'Replying… your next message waits its turn.' : 'Anyone on this floor can join in.';
+            : model.edited() ? 'It will move to the model you picked, starting afresh there.'
+              : '';
+    banner.textContent = say;
+    banner.classList.toggle('hidden', !say);
+    typing.classList.toggle('hidden', view !== 'chat' || !typingNow());
     paintFrame();
-    paintHistory();
     paintView();
   }
 
@@ -396,18 +437,17 @@ export function agentChatScreen([kind]: string[]): Screen {
       messages = [...byId.values()].sort((a, b) => a.at - b.at);
       const key = JSON.stringify([next.conversation?.id, messages]);
       if (key !== messageKey) {
-        const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 160;
+        const atBottom = nearBottom();
         messageKey = key;
         list.dataset.thread = next.conversation?.id ?? '';
-        fill(list, ...messages.map((m) => bubble(cfg, m)), messages.length ? null : h('div.maintenance-chat-empty', {}, h('h3', {}, cfg.emptyTitle), h('p', {}, cfg.emptyText)));
-        if (atBottom || !sameThread) requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
+        fill(list, ...messages.map((m, i) => bubble(cfg, m, messages[i - 1])), messages.length ? null : h('div.lp-chat-empty', {}, h('h3', {}, cfg.emptyTitle), h('p', {}, cfg.emptyText)));
+        if (atBottom || !sameThread) toBottom();
       }
       controls();
     } catch (err) {
       if (!closed && ticket === generation) {
         historyFailed = true;
         showError(`Could not load the conversation: ${(err as Error).message}`);
-        status.textContent = 'Connection unavailable · retrying';
         controls();
       }
     }
@@ -426,7 +466,9 @@ export function agentChatScreen([kind]: string[]): Screen {
       return;
     }
     input.value = '';
+    grow();
     images?.set([]);
+    tray();
     if (loadedDraft) delete drafts[loadedDraft];
     loadedDraft = '';
     saveDraft();
@@ -447,6 +489,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     saveDraft();
     pending = { id, text, attachments: [...(images?.images ?? [])], timer: setTimeout(() => ((pending = undefined), controls(), showError('No answer from the office yet. Check the terminal before sending again.')), 30_000) };
     controls();
+    toBottom();
     net.send({
       t: cfg.sendType,
       id,
@@ -457,7 +500,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     } as never);
   });
   input.addEventListener('input', saveDraft);
-  images?.bind(form);
+  images?.bind(frame.bottom);
 
   const offs = [on('workers', () => void refresh())];
   if (maintenance) {
@@ -471,7 +514,14 @@ export function agentChatScreen([kind]: string[]): Screen {
   return {
     title: cfg.kind === 'product' ? '🧭 Product Lead' : '🛠️ Maintenance',
     el,
-    actions: maintenance ? [button('+ Issue', () => openMaintenanceIssueCreate(() => net.send({ t: 'maintenance.issues' })), '', 'Capture an idea as an issue')] : undefined,
+    actions: [iconButton('🕘', 'Conversations', openHistory)],
+    menu: () => [
+      { icon: '➕', label: 'New conversation', run: () => pick(undefined, true) },
+      { icon: '🖥️', label: 'Open its terminal', sub: 'Answer a permission prompt, watch it work', hidden: !(state?.worker && state.floor), run: () => state?.worker && state.floor && (state.floor === store.floor ? openWorker(state.worker.id) : switchAndOpen(state.worker.id, state.floor)) },
+      { icon: '🧠', label: 'Runs on…', sub: 'Move it to another model', run: openRunsOn },
+      { icon: '💡', label: 'Capture an idea as an issue', hidden: !maintenance, run: () => openMaintenanceIssueCreate(() => net.send({ t: 'maintenance.issues' })) },
+      { icon: '⏏️', label: 'End the session', sub: 'Stops it for everyone; history and stacked commits stay', danger: true, hidden: !(maintenance && state?.worker), run: () => state?.worker && confirmDialog('End Maintenance session?', 'Stops the active session for everyone, including unfinished work. Conversation history, edited files and stacked commits remain.', 'End session', () => net.send({ t: 'worker.kill', workerId: state!.worker!.id })) },
+    ],
     dispose: () => {
       saveDraft();
       closed = true;

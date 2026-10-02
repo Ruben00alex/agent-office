@@ -16,7 +16,7 @@ import { looksGenerated, parseDiff, renderFileDiff, renderThread, repliesOf, STA
 import { CHECK_ICON, REVIEW_BADGE, checksList, commentBox, commentCard, conflicted, errorBox, fixAndMergePrompt, fixConflictsPrompt, getJson, getText, issueContext, labelButton, mergePref, mergeStatus, openClose, openMerge, pullContext, reviewPrompt, spinnerRow, stateOf, avatar } from '../ui/pull';
 import { labelChip } from '../ui/pull';
 import { go, live, type Screen } from './app';
-import { actions, button, chip, empty, fill, heading, layout, page, searchBox, segmented, textarea } from './kit';
+import { actions, button, chip, empty, fill, heading, iconButton, layout, page, searchBox, segmented, textarea } from './kit';
 import { net, openWorker, sendToWorker } from './ctx';
 
 const on = store.on.bind(store);
@@ -28,10 +28,10 @@ const byUpdated = (a: { updatedAt: string }, b: { updatedAt: string }) => b.upda
 function views(active: View) {
   return segmented<View>(
     [
-      { id: 'issues', label: '📌 Issues', count: store.issues.items.filter((i) => i.state === 'OPEN').length },
-      { id: 'pulls', label: '🔀 PRs', count: store.pulls.items.filter((p) => p.state === 'OPEN').length },
-      { id: 'queue', label: '📋 Queue', count: store.queue.tasks.filter((t) => t.status !== 'done').length },
-      { id: 'meeting', label: '🤝 Meeting', count: store.meeting.current?.status === 'running' ? 1 : 0 },
+      { id: 'issues', label: 'Issues', count: store.issues.items.filter((i) => i.state === 'OPEN').length },
+      { id: 'pulls', label: 'PRs', count: store.pulls.items.filter((p) => p.state === 'OPEN').length },
+      { id: 'queue', label: 'Queue', count: store.queue.tasks.filter((t) => t.status !== 'done').length },
+      { id: 'meeting', label: 'Meeting', count: store.meeting.current?.status === 'running' ? 1 : 0 },
     ],
     active,
     (v) => go(`work/${v}`, true),
@@ -39,7 +39,7 @@ function views(active: View) {
 }
 
 function refreshButton(): HTMLElement {
-  return button('🔄', () => net.send({ t: 'gh.refresh' }), '', 'Refresh from GitHub');
+  return iconButton('🔄', 'Refresh from GitHub', () => net.send({ t: 'gh.refresh' }));
 }
 
 const stamp = (st: { loading: boolean; fetchedAt?: number }) => (st.loading ? 'Refreshing…' : st.fetchedAt ? `Updated ${timeAgo(st.fetchedAt)}` : '');
@@ -218,7 +218,7 @@ export function issueScreen([n]: string[]): Screen {
   ];
   paintFrame();
   load();
-  return { title: `Issue #${number}`, el, actions: [button('🔄', load, '', 'Reload')], dispose: () => (offs.forEach((o) => o()), comment.dispose()) };
+  return { title: `Issue #${number}`, el, actions: [iconButton('🔄', 'Reload', load)], dispose: () => (offs.forEach((o) => o()), comment.dispose()) };
 }
 
 // ---- Pull requests ----------------------------------------------------------------------------
@@ -463,10 +463,10 @@ export function pullScreen([n]: string[]): Screen {
     title: `PR #${number}`,
     el: frame.el,
     actions: [
-      button('🔄', () => {
+      iconButton('🔄', 'Reload from GitHub', () => {
         net.send({ t: 'gh.refresh' });
         load();
-      }, '', 'Reload from GitHub'),
+      }),
     ],
     dispose: () => (offs.forEach((o) => o()), comment.dispose()),
   };

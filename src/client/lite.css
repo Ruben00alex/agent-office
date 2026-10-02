@@ -7,11 +7,14 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 
 /* The shell: a top bar with the page's title, the page, and the tabs along the bottom. */
 :root { --tabbar: calc(62px + env(safe-area-inset-bottom)); --gutter: 12px; }
-.lite-bar { flex: none; position: relative; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 8px var(--gutter); padding-top: max(8px, env(safe-area-inset-top)); background: var(--paper-2); border-bottom: 3px solid var(--ink); min-height: 60px; }
-.lite-bar .btn { height: 44px; min-width: 44px; flex: none; justify-content: center; text-decoration: none; }
+.lite-bar { flex: none; position: relative; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px var(--gutter); padding-top: max(6px, env(safe-area-inset-top)); background: var(--paper-2); border-bottom: 3px solid var(--ink); min-height: 54px; }
+.lite-bar .btn { flex: none; justify-content: center; text-decoration: none; }
 .lite-heading { flex: 1; min-width: 0; }
-.lite-heading h1 { margin: 0; font-size: 19px; font-weight: 900; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lite-subtitle { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lite-heading h1 { margin: 0; font-size: 18px; font-weight: 900; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lite-subtitle { margin: 0; font-size: 12px; font-weight: 800; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lite-subtitle[data-tone=live]::before, .lite-subtitle[data-tone=warn]::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--good); animation: lp-pulse 1.2s infinite; }
+.lite-subtitle[data-tone=warn] { color: #c9184a; } .lite-subtitle[data-tone=warn]::before { background: var(--bad); }
+@keyframes lp-pulse { 50% { opacity: .35; } }
 .lite-actions { display: flex; gap: 6px; flex: none; }
 .lite-actions:empty { display: none; }
 
@@ -109,7 +112,7 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 /* A row of choices, as touch-sized tabs. */
 .lp-seg { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; }
 .lp-seg::-webkit-scrollbar { display: none; }
-.lp-seg button { flex: 1 1 0; min-width: max-content; min-height: 44px; padding: 6px 8px; border: 3px solid var(--ink); border-radius: 12px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.lp-seg button { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 6px 7px; gap: 4px; border: 3px solid var(--ink); border-radius: 12px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .lp-seg button.on { background: var(--ink); color: #fff; }
 .lp-seg .n { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; }
 
@@ -229,3 +232,57 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lp-fill .settings-pane { flex: 1; min-height: 0; overflow-y: auto; }
 .lp-fill .settings-pane.hidden { display: none; }
 .lp-fill .settings-nav { flex: none; }
+
+/* A page inside a tab is a screen of its own: no tab bar, so it has all the room (← goes back). */
+body[data-root="0"] .lite-nav { display: none; }
+body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-inset-bottom); }
+.lp-icon { width: 42px; height: 42px; min-width: 42px; padding: 0; border-radius: 50%; justify-content: center; font-size: 18px; line-height: 1; box-shadow: 0 2px 0 var(--ink); }
+.lite-back { font-size: 20px; }
+
+/* Sheets: menus, pickers and short forms that slide up over the page. */
+.sheet-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center; background: rgba(43,45,66,.45); animation: fade .15s; }
+.sheet-backdrop.leaving { opacity: 0; transition: opacity .15s; }
+.sheet { width: min(640px, 100%); max-height: 86dvh; display: flex; flex-direction: column; background: var(--paper); border: 3px solid var(--ink); border-bottom: 0; border-radius: 22px 22px 0 0; box-shadow: 0 -4px 0 var(--ink); animation: lp-rise .2s ease-out; padding-bottom: env(safe-area-inset-bottom); }
+.sheet.tall { height: 86dvh; }
+@keyframes lp-rise { from { transform: translateY(40px); opacity: .4; } }
+.sheet-grab { flex: none; width: 44px; height: 5px; margin: 8px auto 0; border-radius: 999px; background: rgba(43,45,66,.25); }
+.sheet-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 16px 10px; }
+.sheet-head b { flex: 1; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-head .close { position: static; width: 40px; height: 40px; border-radius: 50%; padding: 0; justify-content: center; }
+.sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; overscroll-behavior: contain; }
+.sheet-list, .sheet-stack { display: flex; flex-direction: column; gap: 10px; }
+.sheet-body .lp-row.danger { background: #ffd6e0; }
+.sheet-body input[type=search], .sheet-body input[type=text] { width: 100%; font: inherit; font-size: 16px; border: 3px solid var(--ink); border-radius: 12px; padding: 10px 12px; background: #fff; }
+
+/* Chat: the messages get the screen. */
+.lp-chatscroll { gap: 2px; padding: 4px 2px 10px; }
+.lp-top-slim { gap: 0; }
+.lp-chatlog { display: flex; flex-direction: column; gap: 2px; }
+.lp-msg { display: flex; flex-direction: column; max-width: 88%; margin-top: 2px; }
+.lp-msg.first { margin-top: 10px; }
+.lp-msg.from-user { align-self: flex-end; align-items: flex-end; }
+.lp-msg.from-agent { align-self: flex-start; align-items: flex-start; }
+.lp-msg-meta { display: flex; align-items: center; gap: 6px; padding: 0 6px 2px; font-size: 12px; color: var(--muted); }
+.lp-msg-meta b { color: var(--ink); } .lp-msg-meta .dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ink); }
+.lp-bubble { padding: 9px 13px; border: 3px solid var(--ink); border-radius: 18px; background: #fff; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.lp-msg.from-user .lp-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
+.lp-msg.from-agent .lp-bubble { border-bottom-left-radius: 6px; }
+.lp-bubble p { margin: 0; white-space: pre-wrap; }
+.lp-bubble .md p { white-space: normal; } .lp-bubble .md > :first-child { margin-top: 0; } .lp-bubble .md > :last-child { margin-bottom: 0; }
+.lp-bubble pre { overflow-x: auto; max-width: 100%; position: relative; } .lp-bubble img { max-width: 100%; height: auto; }
+.lp-msg-pending { padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.lp-chat-empty { align-self: center; text-align: center; padding: 40px 20px; color: var(--muted); } .lp-chat-empty h3 { margin: 0 0 6px; color: var(--ink); } .lp-chat-empty p { margin: 0; font-size: 14px; font-weight: 600; }
+.lp-typing { align-self: flex-start; display: flex; gap: 4px; margin: 8px 4px; padding: 11px 14px; border: 3px solid var(--ink); border-radius: 18px 18px 18px 6px; background: #fff; }
+.lp-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); animation: lp-bounce 1s infinite; } .lp-typing i:nth-child(2) { animation-delay: .15s; } .lp-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes lp-bounce { 0%, 60%, 100% { transform: none; opacity: .35; } 30% { transform: translateY(-4px); opacity: 1; } }
+.lp-jump { position: sticky; bottom: 6px; align-self: flex-end; flex: none; width: 42px; height: 42px; margin-top: -42px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 0 3px 0 var(--ink); font-size: 18px; font-weight: 900; cursor: pointer; z-index: 2; }
+.lp-bottom:has(.lp-compose) { gap: 6px; padding-top: 8px; }
+.lp-compose { display: flex; align-items: flex-end; gap: 8px; }
+.lp-compose textarea, .lp-compose input[type=text] { flex: 1; min-width: 0; min-height: 44px; max-height: 140px; padding: 10px 14px; border: 3px solid var(--ink); border-radius: 22px; background: #fff; font: inherit; font-size: 16px; line-height: 1.3; resize: none; outline: none; }
+.lp-compose textarea:focus, .lp-compose input:focus { border-color: var(--accent); }
+.lp-send { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; justify-content: center; font-size: 18px; }
+.lp-attach { flex: none; }
+.lp-banner { margin: 0; padding: 7px 12px; border-radius: 12px; background: #fff3c4; border: 2px solid rgba(43,45,66,.2); font-size: 12px; font-weight: 800; line-height: 1.35; }
+.lp-banner.bad { background: #ffd6e0; }
+.lp-tray { padding: 0; } .lp-tray .maintenance-image-drafts { display: flex; gap: 6px; flex-wrap: wrap; }
+.lp-bubble .md { padding: 0; margin: 0; background: none; border: 0; }

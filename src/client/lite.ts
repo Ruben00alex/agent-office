@@ -17,7 +17,7 @@ import { routeElevatorMessage } from './ui/elevator';
 import { openSignIns } from './ui/signins';
 import { waitingInOrder } from './nextup';
 import { askNotifyPermission, notifyPermission, waitingOnSomeone } from './notify';
-import { refreshBadges, route, startRouter, tabBadge } from './lite/app';
+import { refreshBadges, route, setGlobalMenu, startRouter, tabBadge } from './lite/app';
 import { net, notifier, saved, settings } from './lite/ctx';
 import { changesScreen, workerScreen, workersScreen } from './lite/workers';
 import { issueScreen, pullScreen, workScreen } from './lite/work';
@@ -37,7 +37,7 @@ route('worker', 'workers', (a) => (a[1] === 'changes' ? changesScreen(a) : worke
 route('work', 'work', workScreen);
 route('issue', 'work', issueScreen);
 route('pull', 'work', pullScreen);
-route('chat', 'chat', chatScreen);
+route('chat', 'chat', () => chatScreen());
 route('agents', 'agents', () => agentsScreen());
 route('agent', 'agents', (a) => (a[0] === 'ask' ? askScreen() : a[0] === 'change' ? changeScreen(a.slice(1)) : agentChatScreen(a)));
 route('office', 'office', () => officeScreen());
@@ -149,14 +149,12 @@ function sendDoing(reconnected = false) {
 onModalChange(() => sendDoing());
 onDoingChange(() => sendDoing());
 
-// ---- Notifications ------------------------------------------------------------------------------
-// The browser only asks from a tap, so there's a button for it while it hasn't been asked.
-const bell = h('button.btn', { type: 'button', title: 'Get a notification when a worker needs input or is done', 'aria-label': 'Turn on notifications' }, '🔔');
-bell.addEventListener('click', async () => {
-  await askNotifyPermission();
-  bell.remove();
-});
-if (notifyPermission() === 'default' && settings.notify) $('lite-global').prepend(bell);
+// ---- Every page's ⋯ ends with these -------------------------------------------------------------
+// The browser only asks about notifications from a tap, so there's an item for it while it hasn't been asked.
+setGlobalMenu(() => [
+  { icon: '🔔', label: 'Turn on notifications', sub: 'A buzz when a worker needs you or is done', hidden: !(notifyPermission() === 'default' && settings.notify), run: () => void askNotifyPermission() },
+  { icon: '🏢', label: 'Open the 3D office', sub: 'Walk around: the rooftop bar, golf, voice', run: () => location.assign('/?3d=1') },
+]);
 
 // ---- In ----------------------------------------------------------------------------------------
 /** Your name, the first time this browser comes in on the shared password. */

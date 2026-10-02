@@ -2,6 +2,7 @@
 // through them), a top bar with the page's title and actions, and a bottom tab bar.
 
 import { $, h } from '../ui/dom';
+import { openSheet, row } from './kit';
 
 export interface Screen {
   title: string;
@@ -10,8 +11,41 @@ export interface Screen {
   sub?: string;
   /** Buttons on the right of the top bar. */
   actions?: HTMLElement[];
+  /** What the ⋯ in the top bar offers for this page, read when it's opened (so it can follow the page's state). */
+  menu?: () => MenuItem[];
   /** Called when the page is left: unsubscribe, stop timers. */
   dispose?: () => void;
+}
+
+export interface MenuItem {
+  icon: string;
+  label: string;
+  sub?: string;
+  danger?: boolean;
+  hidden?: boolean;
+  run(): void;
+}
+
+let globalMenu: () => MenuItem[] = () => [];
+/** Items every page's ⋯ ends with (the 3D office, notifications). */
+export function setGlobalMenu(fn: () => MenuItem[]) {
+  globalMenu = fn;
+}
+
+/** Changes the line under the page's title while you're on it (a chat's status, say). */
+export function setSubtitle(text: string | undefined, tone?: 'live' | 'warn') {
+  const sub = $('lite-sub');
+  sub.textContent = text ?? '';
+  sub.classList.toggle('hidden', !text);
+  sub.dataset.tone = tone ?? '';
+}
+
+function openMenu() {
+  const items = [...(current?.menu?.() ?? []), ...globalMenu()].filter((i) => !i.hidden);
+  const sheet = openSheet({
+    title: current?.title ?? 'Menu',
+    body: h('div.sheet-list', {}, ...items.map((i) => row({ icon: i.icon, title: i.label, sub: i.sub, cls: i.danger ? 'danger' : '', right: h('span'), onclick: () => (sheet.close(), i.run()) }))),
+  });
 }
 
 type Factory = (args: string[]) => Screen;
@@ -80,13 +114,13 @@ function render() {
   // A page inside a tab (an issue, a worker, a floor) has a way back; the tabs' own front pages don't.
   const root = name !== r.tab;
   $('lite-title').textContent = screen.title;
-  const sub = $('lite-sub');
-  sub.textContent = screen.sub ?? '';
-  sub.classList.toggle('hidden', !screen.sub);
+  setSubtitle(screen.sub);
   $('lite-back').classList.toggle('hidden', !root);
   $('lite-actions').replaceChildren(...(screen.actions ?? []));
   for (const t of TABS) $(`tab-${t.id}`).classList.toggle('on', t.id === r.tab);
   document.body.dataset.screen = name;
+  // The tabs belong to the tabs' own front pages; a page inside one is a screen of its own, with the room to itself.
+  document.body.dataset.root = root ? '0' : '1';
 }
 
 export function refreshBadges() {
@@ -99,6 +133,7 @@ export function refreshBadges() {
 
 export function startRouter() {
   $('lite-back').addEventListener('click', () => back());
+  $('lite-menu').addEventListener('click', openMenu);
   const nav = $('lite-tabs');
   nav.replaceChildren(
     ...TABS.map((t) =>
