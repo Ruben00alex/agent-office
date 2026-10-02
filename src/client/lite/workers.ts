@@ -15,7 +15,7 @@ import { pathLabel, plusMinus, renderDiff, renderPreview, STATUS_WORD } from '..
 import { byUrgency, waitingInOrder, waitingLabel } from '../nextup';
 import { waitingOnSomeone } from '../notify';
 import { back, go, live, type Screen } from './app';
-import { actions, button, empty, fill, heading, page, row } from './kit';
+import { actions, button, empty, fill, heading, layout, page, row } from './kit';
 import { fixLostWorktree, net, onServerMessage, openShell, openWorker, promptWorker, sendHome, sendToWorker, showTerminal } from './ctx';
 
 const on = store.on.bind(store);
@@ -69,13 +69,11 @@ export function workersScreen(): Screen {
   const floorBox = h('div.lp-floor');
   const elsewhere = h('div.lite-elsewhere');
   const list = h('ul.lite-workers');
-  const el = page(
-    floorBox,
-    elsewhere,
-    h('h2.lp-h', {}, h('span', {}, 'Workers'), waitingNow),
-    list,
-    actions(button('✨ New task', () => sendToWorker('✨ New task'), 'primary'), button('🐚 Shell', openShell, '', 'A shared shell at a free desk')),
-  );
+  const el = layout({
+    top: [floorBox, elsewhere, h('h2.lp-h', {}, h('span', {}, 'Workers'), waitingNow)],
+    scroll: [list],
+    bottom: [actions(button('✨ New task', () => sendToWorker('✨ New task'), 'primary'), button('🐚 Shell', openShell, '', 'A shared shell at a free desk'))],
+  }).el;
   const paint = () => {
     const f = store.currentFloor();
     const p = store.project;
@@ -182,8 +180,11 @@ export function changesScreen([id]: string[]): Screen {
   const open = new Set<string>();
   const diffs = new Map<string, { sig: string; node: HTMLElement }>();
   const asked = new Map<string, string>();
-  const el = page();
-  const body = h('div');
+  const topBox = h('div.lp-top-inner');
+  const listBox = h('div');
+  const barBox = h('div.lp-actions');
+  const frame = layout({ top: [topBox], scroll: [listBox], bottom: [barBox] });
+  const el = frame.el;
 
   const watch = () => net.send({ t: 'changes.watch', workerId: id, repo });
   const unwatch = () => net.send({ t: 'changes.unwatch', workerId: id, repo });
@@ -260,18 +261,16 @@ export function changesScreen([id]: string[]): Screen {
     commit.disabled = busy || !uncommitted;
     const discard = button('🗑️ Discard all', () => confirmDiscard(uncommitted), 'danger');
     discard.disabled = busy || !uncommitted;
+    fill(topBox, tabs, head, busy ? h('p.lp-note', {}, `⏳ ${s!.busy}`) : null);
     fill(
-      body,
-      tabs,
-      head,
-      busy ? h('p.lp-note', {}, `⏳ ${s!.busy}`) : null,
+      listBox,
       s && !s.error
         ? s.files.length
           ? h('ul.lp-files', {}, ...s.files.map(fileRow), s.more ? h('li.lp-note', {}, `…and ${s.more} more`) : null)
           : empty('🌱', s.base === 'HEAD' ? 'Nothing uncommitted' : `${w.name} hasn't changed anything since ${s.base} yet`, 'This page follows the checkout as the worker works.')
         : null,
-      actions(commit, discard, prButton),
     );
+    fill(barBox, commit, discard, prButton);
   }
 
   const openCommit = (n: number) =>
@@ -329,7 +328,6 @@ export function changesScreen([id]: string[]): Screen {
   const offWorkers = on('workers', () => {
     if (!store.workers.has(id)) paint();
   });
-  el.append(body);
   paint();
   watch();
   return {

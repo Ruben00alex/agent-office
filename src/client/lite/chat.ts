@@ -3,7 +3,7 @@
 import { store } from '../state';
 import { h, timeAgo } from '../ui/dom';
 import { go, live, type Screen } from './app';
-import { empty, fill, page, segmented } from './kit';
+import { empty, fill, layout, segmented } from './kit';
 import { net } from './ctx';
 
 const on = store.on.bind(store);
@@ -34,19 +34,21 @@ function talkScreen(): Screen {
     net.send({ t: 'chat', text });
     input.value = '';
   });
+  const view = layout({ top: [tabs('chat')], scroll: [log], bottom: [form] });
   const paint = () => {
-    const stuck = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 160;
+    const sc = view.scroller;
+    const stuck = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 160;
     fill(
       log,
       ...(store.chat.length
         ? store.chat.map((c) => h('div.lite-chat-line', {}, h('span.dot', { style: `background:${c.color}` }), h('div', {}, h('b', {}, c.name, h('small', {}, ` ${timeAgo(c.at)}`)), h('p', {}, c.text))))
         : [empty('💬', 'Nobody has said anything yet', 'Say hello to everyone in the office.')]),
     );
-    if (stuck) requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    if (stuck) requestAnimationFrame(() => (sc.scrollTop = sc.scrollHeight));
   };
   const off = live(on, ['chat'], paint);
-  requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  return { title: 'Chat', el: page(tabs('chat'), log, form), dispose: off };
+  requestAnimationFrame(() => (view.scroller.scrollTop = view.scroller.scrollHeight));
+  return { title: 'Chat', el: view.el, dispose: off };
 }
 
 function peopleScreen(): Screen {
@@ -68,5 +70,5 @@ function peopleScreen(): Screen {
         : [empty('👥', 'Nobody else is here')]),
     );
   };
-  return { title: 'Chat', el: page(tabs('people'), list), dispose: live(on, ['peers', 'floors'], paint) };
+  return { title: 'Chat', el: layout({ top: [tabs('people')], scroll: [list] }).el, dispose: live(on, ['peers', 'floors'], paint) };
 }

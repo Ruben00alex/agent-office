@@ -76,3 +76,17 @@ export function searchBox(placeholder: string, onInput: (q: string) => void, val
 export function fill(el: HTMLElement, ...kids: Kid[]) {
   el.replaceChildren(...kids.filter((k): k is Node | string => k !== null && k !== undefined && k !== false));
 }
+
+/**
+ * A page that never scrolls as a whole: `top` and `bottom` stay put and only `scroll` moves. Chats,
+ * lists with a filter box, and anything with controls you shouldn't have to scroll back up to reach.
+ */
+export function layout(opts: { top?: Kid[]; scroll: Kid[] | HTMLElement; bottom?: Kid[] }): { el: HTMLElement; scroller: HTMLElement; top: HTMLElement; bottom: HTMLElement } {
+  const scroller = opts.scroll instanceof HTMLElement ? opts.scroll : h('div.lp-scrollbody', {}, ...opts.scroll.filter((k): k is Node | string => !!k));
+  scroller.classList.add('lp-scroll');
+  const top = h('div.lp-top', {}, ...(opts.top ?? []));
+  const bottom = h('div.lp-bottom', {}, ...(opts.bottom ?? []));
+  top.classList.toggle('hidden', !top.childNodes.length);
+  bottom.classList.toggle('hidden', !bottom.childNodes.length);
+  return { el: h('div.lp.lp-fill', {}, top, scroller, bottom), scroller, top, bottom };
+}

@@ -16,7 +16,7 @@ import { looksGenerated, parseDiff, renderFileDiff, renderThread, repliesOf, STA
 import { CHECK_ICON, REVIEW_BADGE, checksList, commentBox, commentCard, conflicted, errorBox, fixAndMergePrompt, fixConflictsPrompt, getJson, getText, issueContext, labelButton, mergePref, mergeStatus, openClose, openMerge, pullContext, reviewPrompt, spinnerRow, stateOf, avatar } from '../ui/pull';
 import { labelChip } from '../ui/pull';
 import { go, live, type Screen } from './app';
-import { actions, button, chip, empty, fill, heading, page, row, searchBox, segmented, textarea } from './kit';
+import { actions, button, chip, empty, fill, heading, layout, page, searchBox, segmented, textarea } from './kit';
 import { net, openWorker, sendToWorker } from './ctx';
 
 const on = store.on.bind(store);
@@ -94,7 +94,7 @@ function issuesScreen(): Screen {
   const bar = h('div.lp-filters');
   const labelRow = h('div.lp-labels');
   const status = h('p.lp-note');
-  const el = page(views('issues'), searchBox('Filter by title…', (q) => ((issueQuery = q), paint()), issueQuery), bar, labelRow, status, list);
+  const el = layout({ top: [views('issues'), searchBox('Filter by title…', (q) => ((issueQuery = q), paint()), issueQuery), bar, labelRow, status], scroll: [list] }).el;
   const paint = () => {
     const st = store.issues;
     status.textContent = stamp(st);
@@ -266,7 +266,7 @@ function pullsScreen(): Screen {
   const list = h('ul.lp-cards');
   const bar = h('div.lp-filters');
   const status = h('p.lp-note');
-  const el = page(views('pulls'), searchBox('Filter by title…', (q) => ((pullQuery = q), paint()), pullQuery), bar, status, list);
+  const el = layout({ top: [views('pulls'), searchBox('Filter by title…', (q) => ((pullQuery = q), paint()), pullQuery), bar, status], scroll: [list] }).el;
   const paint = () => {
     const st = store.pulls;
     status.textContent = stamp(st);
@@ -447,7 +447,7 @@ export function pullScreen([n]: string[]): Screen {
       .finally(() => g === generation && (paintFrame(), paintBody()));
   }
 
-  el.append(h('h1.lp-title', {}, it.title), meta, bar, tabs, body);
+  const frame = layout({ top: [tabs], scroll: [h('h1.lp-title', {}, it.title), meta, bar, body] });
   const offs = [
     on('pulls', () => {
       const fresh = store.pulls.items.find((p) => p.number === number);
@@ -461,7 +461,7 @@ export function pullScreen([n]: string[]): Screen {
   load();
   return {
     title: `PR #${number}`,
-    el,
+    el: frame.el,
     actions: [
       button('🔄', () => {
         net.send({ t: 'gh.refresh' });
@@ -574,7 +574,7 @@ function queueScreen(): Screen {
   };
   const off = live(on, ['queue', 'workers', 'issues', 'machine'], paint);
   const timer = setInterval(paint, 30_000);
-  return { title: 'Work', el: page(views('queue'), form, list), dispose: () => (off(), clearInterval(timer)) };
+  return { title: 'Work', el: layout({ top: [views('queue')], scroll: [form, list] }).el, dispose: () => (off(), clearInterval(timer)) };
 }
 
 // ---- The meeting room -------------------------------------------------------------------------
@@ -612,5 +612,5 @@ function meetingScreen(): Screen {
   };
   const off = live(on, ['meeting', 'pulls'], paint);
   const w = on('workers', () => showing === 'status' && paint());
-  return { title: 'Work', el: page(views('meeting'), holder, foot), dispose: () => (off(), w()) };
+  return { title: 'Work', el: layout({ top: [views('meeting')], scroll: [holder], bottom: [foot] }).el, dispose: () => (off(), w()) };
 }

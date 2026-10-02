@@ -26,7 +26,7 @@ import { openCharacter } from '../ui/character';
 import { openExpand } from '../ui/floorplan';
 import { describeSky } from '../world/sky';
 import { go, live, type Screen } from './app';
-import { actions, button, chip, empty, fill, heading, input, note, page, row, searchBox, segmented } from './kit';
+import { actions, button, chip, empty, fill, heading, input, layout, note, page, row, searchBox, segmented } from './kit';
 import { net, notifier, onServerMessage, openWorker, settings, showTerminal } from './ctx';
 
 const on = store.on.bind(store);
@@ -194,7 +194,7 @@ export function addProjectScreen(): Screen {
     net.send({ t: 'floor.repos' });
   }
   paint();
-  return { title: 'Add a project', el: page(box, list, status, actions(addBtn, refresh)), dispose: () => (offMsg(), offs.forEach((o) => o())) };
+  return { title: 'Add a project', el: layout({ top: [box], scroll: [list, status], bottom: [actions(addBtn, refresh)] }).el, dispose: () => (offMsg(), offs.forEach((o) => o())) };
 }
 
 // ---- Services ---------------------------------------------------------------------------------
@@ -245,7 +245,7 @@ let docQuery = '';
 export function docsScreen(): Screen {
   const floor = store.floor ?? '';
   const list = h('div');
-  const el = page(searchBox('Filter the docs…', (q) => ((docQuery = q), paint()), docQuery), list);
+  const el = layout({ top: [searchBox('Filter the docs…', (q) => ((docQuery = q), paint()), docQuery)], scroll: [list] }).el;
   const paint = () => {
     if (!docFiles || docFiles.floor !== floor) return fill(list, h('p.lp-note', {}, 'Looking along the shelves…'));
     const hits = docQuery.trim() ? filterDocs(docFiles.files, docQuery) : shelfOrder(docFiles.files).map((doc) => ({ doc }));
@@ -268,6 +268,7 @@ export function docsScreen(): Screen {
 
 export function docScreen([enc]: string[]): Screen {
   const path = decodeURIComponent(enc ?? '');
+  let scrollBody: HTMLElement | undefined;
   const floor = store.floor ?? '';
   const q = (params: Record<string, string>) => new URLSearchParams({ floor, ...params }).toString();
   const remote = store.project?.remote;
@@ -278,7 +279,7 @@ export function docScreen([enc]: string[]): Screen {
   const jump = (hash: string) => {
     const at = hash ? (body.querySelector(`[data-anchor="${CSS.escape(hash.replace(/^user-content-/, ''))}"]`) ?? body.querySelector(`[id="${CSS.escape(hash)}"]`)) : null;
     if (at) at.scrollIntoView({ block: 'start' });
-    else window.scrollTo(0, 0);
+    else scrollBody?.scrollTo({ top: 0 });
   };
   toc.addEventListener('change', () => (jump(toc.value), (toc.value = '')));
   body.addEventListener('click', (e) => {
@@ -322,7 +323,9 @@ export function docScreen([enc]: string[]): Screen {
       fill(body, h('p.lp-note', {}, [`${Math.max(1, Math.round(words / 220))} min read`, path].join(' · ')), md);
     })
     .catch((e: Error) => fill(body, h('p.lp-note.bad', {}, `Couldn't open ${path}: ${e.message}`)));
-  return { title: path.slice(path.lastIndexOf('/') + 1), sub: path.includes('/') ? path : undefined, el: page(toc, body) };
+  const frame = layout({ top: [toc], scroll: [body] });
+  scrollBody = frame.scroller;
+  return { title: path.slice(path.lastIndexOf('/') + 1), sub: path.includes('/') ? path : undefined, el: frame.el };
 }
 
 // ---- Whiteboard -------------------------------------------------------------------------------
@@ -359,7 +362,7 @@ export function whiteboardScreen(): Screen {
   const off = live(on, ['drawing', 'peers'], paintPeople);
   return {
     title: '📝 Whiteboard',
-    el: h('div.lp.lp-wide', {}, people, host),
+    el: h('div.lp.lp-fill', {}, h('div.lp-top', {}, people), host),
     dispose: () => {
       closed = true;
       off();
@@ -412,7 +415,7 @@ export function searchScreen(): Screen {
   const box = searchBox('Search the chat and every terminal…', (q) => (clearTimeout(timer), (timer = setTimeout(() => void run(q), 250))), lastQuery);
   box.maxLength = SEARCH_MAX;
   void run(lastQuery);
-  return { title: '🔎 Search', el: page(box, status, results), dispose: () => clearTimeout(timer) };
+  return { title: '🔎 Search', el: layout({ top: [box, status], scroll: [results] }).el, dispose: () => clearTimeout(timer) };
 }
 
 // ---- Spend & limits ---------------------------------------------------------------------------
@@ -521,7 +524,7 @@ export function settingsScreen(): Screen {
     { lite: true },
   );
   built.body.classList.add('lp-settings');
-  return { title: '⚙️ Settings', el: h('div.lp.lp-wide', {}, built.body), dispose: built.dispose };
+  return { title: '⚙️ Settings', el: h('div.lp.lp-fill', {}, built.body), dispose: built.dispose };
 }
 
 // ---- What only the 3D office has --------------------------------------------------------------

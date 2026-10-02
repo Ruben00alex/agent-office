@@ -15,7 +15,7 @@ import { imageComposer, imageEvidence } from '../ui/maintenance-images';
 import { openMaintenanceIssueCreate, workPanel } from '../ui/maintenance-work';
 import { renderDiff } from '../ui/changes';
 import { go, live, type Screen } from './app';
-import { actions, button, empty, fill, heading, note, page, row, segmented, textarea } from './kit';
+import { actions, button, empty, fill, heading, layout, note, page, row, segmented, textarea } from './kit';
 import { net, onServerMessage, openWorker } from './ctx';
 
 const on = store.on.bind(store);
@@ -181,7 +181,9 @@ export function agentChatScreen([kind]: string[]): Screen {
   const subview = h('div.lp-subview.hidden');
   const tools = h('div.lp-actions');
   const tabs = h('div');
-  const el = page(status, tools, tabs, history, older, list, subview, model.element, form);
+  const frame = layout({ top: [status, tools, tabs], scroll: [history, older, list, subview], bottom: [model.element, form] });
+  const el = frame.el;
+  const scroller = frame.scroller;
 
   function showError(text: string) {
     errorEl.textContent = text;
@@ -244,6 +246,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     older.classList.toggle('hidden', !chat || showHistory || !state?.conversation?.hasOlder);
     model.element.classList.toggle('hidden', view === 'review' || showHistory);
     subview.classList.toggle('hidden', chat || showHistory);
+    frame.bottom.classList.toggle('hidden', !chat || showHistory);
     void busy;
   }
 
@@ -393,11 +396,11 @@ export function agentChatScreen([kind]: string[]): Screen {
       messages = [...byId.values()].sort((a, b) => a.at - b.at);
       const key = JSON.stringify([next.conversation?.id, messages]);
       if (key !== messageKey) {
-        const atBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 160;
+        const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 160;
         messageKey = key;
         list.dataset.thread = next.conversation?.id ?? '';
         fill(list, ...messages.map((m) => bubble(cfg, m)), messages.length ? null : h('div.maintenance-chat-empty', {}, h('h3', {}, cfg.emptyTitle), h('p', {}, cfg.emptyText)));
-        if (atBottom || !sameThread) requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        if (atBottom || !sameThread) requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
       }
       controls();
     } catch (err) {
