@@ -427,7 +427,7 @@ export class GitHub {
     this.onPulls(this.pulls);
     const asked = Date.now();
     try {
-      const fields = 'number,title,state,isDraft,url,author,labels,reviewDecision,headRefName,headRefOid,baseRefName,createdAt,updatedAt,additions,deletions,statusCheckRollup,body,closingIssuesReferences';
+      const fields = 'number,title,state,isDraft,url,author,labels,reviewDecision,headRefName,headRefOid,baseRefName,createdAt,updatedAt,additions,deletions,statusCheckRollup,body';
       const [open, merged, closed] = await Promise.all([
         this.run(['pr', 'list', '--state', 'open', '--limit', '150', '--json', fields], this.dir),
         this.run(['pr', 'list', '--state', 'merged', '--limit', '30', '--json', fields], this.dir),
@@ -436,6 +436,25 @@ export class GitHub {
       // `--state closed` includes merged PRs; keep only the ones closed without merging.
       const seen = new Set<number>();
       const all = [...JSON.parse(open), ...JSON.parse(merged), ...JSON.parse(closed)].filter((p: any) => !seen.has(p.number) && seen.add(p.number));
+      // This GraphQL field isn't supported by `gh pr list --json`. Enrich merged PRs
+      // separately so missing link metadata can never take down the board feed.
+      const linked = new Map<number, number[]>();
+      const mergedNumbers = all.filter((p: any) => p.state === 'MERGED').map((p: any) => Number(p.number)).filter((n: number) => Number.isSafeInteger(n) && n > 0);
+      if (mergedNumbers.length) {
+        try {
+          const { nameWithOwner } = await this.repoInfo();
+          const [owner, name] = nameWithOwner.split('/');
+          const selections = mergedNumbers.map(n => `p${n}: pullRequest(number: ${n}) { closingIssuesReferences(first: 100) { nodes { number repository { nameWithOwner } } } }`).join(' ');
+          const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${selections} } }`;
+          const result = JSON.parse(await this.run(['api', 'graphql', '-f', `query=${query}`, '-f', `owner=${owner}`, '-f', `name=${name}`], this.dir));
+          for (const n of mergedNumbers) {
+            const nodes = result.data?.repository?.[`p${n}`]?.closingIssuesReferences?.nodes ?? [];
+            linked.set(n, nodes.filter((i: any) => i.repository?.nameWithOwner === nameWithOwner).map((i: any) => Number(i.number)).filter((i: number) => Number.isSafeInteger(i) && i > 0));
+          }
+        } catch {
+          // Closing keywords in the title/body still identify completed issues.
+        }
+      }
       const fetched: GhPull[] = all.map((p: any) => ({
         number: p.number,
         title: p.title,
@@ -454,7 +473,7 @@ export class GitHub {
         deletions: p.deletions ?? 0,
         checks: checksOf(p.statusCheckRollup),
         body: String(p.body ?? '').slice(0, 4000),
-        closes: (p.closingIssuesReferences ?? []).map((r: any) => Number(r.number)).filter((n: number) => Number.isInteger(n) && n > 0),
+        closes: linked.get(p.number) ?? [],
       }));
       const items = this.relabel('pull', fetched, asked);
       this.pulls = { items, fetchedAt: Date.now(), loading: false };

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MergeWatch } from '../src/server/github.js';
+import { GitHub, MergeWatch } from '../src/server/github.js';
 import type { GhPull } from '../src/shared/protocol.js';
 
 const pull = (number: number, state: string): GhPull => ({
@@ -9,6 +9,30 @@ const pull = (number: number, state: string): GhPull => ({
   checks: 'none', body: '', closes: [],
 });
 const numbers = (ps: GhPull[]) => ps.map((p) => p.number);
+
+for (const linksFail of [false, true]) test(`PR board loads with CLI-supported fields when link enrichment ${linksFail ? 'fails' : 'succeeds'}`, async () => {
+  const github = new GitHub('.', () => {}, () => {});
+  (github as any).run = async (args: string[]) => {
+    if (args[0] === 'issue') return '[]';
+    if (args[0] === 'pr') {
+      assert.ok(!args[args.indexOf('--json') + 1].split(',').includes('closingIssuesReferences'), 'gh pr list rejects this field');
+      const state = args[args.indexOf('--state') + 1];
+      return JSON.stringify(state === 'open' ? [pull(1, 'OPEN')] : [pull(2, 'MERGED')]);
+    }
+    if (args[0] === 'repo') return JSON.stringify({ nameWithOwner: 'team/office' });
+    if (linksFail) throw new Error('GraphQL unavailable');
+    assert.ok(args.includes('graphql'));
+    return JSON.stringify({ data: { repository: { p2: { closingIssuesReferences: { nodes: [
+      { number: 28, repository: { nameWithOwner: 'team/office' } },
+      { number: 29, repository: { nameWithOwner: 'other/project' } },
+    ] } } } } });
+  };
+  await github.refresh();
+  assert.equal(github.pulls.error, undefined);
+  assert.equal(github.pulls.loading, false);
+  assert.deepEqual(numbers(github.pulls.items), [1, 2]);
+  assert.deepEqual(github.pulls.items[1].closes, linksFail ? [] : [28]);
+});
 
 test('a pull request that was open at the last look and is merged now rings once', () => {
   const w = new MergeWatch();
