@@ -3,13 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#fff1de" />
+    <meta name="theme-color" content="#ffffff" />
     <title>Agent Office</title>
     <link rel="icon" href="/favicon.svg" />
     <link rel="stylesheet" href="./lite.css" />
   </head>
   <body class="lite">
-    <!-- The 2D view (lite.ts): the office as an app for a phone, one full-screen page at a time (lite/). -->
+    <!-- The 2D view (lite.ts): the office as an app, one page at a time (lite/). On a phone the tabs run
+         along the bottom; on a wide window they're a sidebar on the left, under the office's name. -->
+    <div class="lite-brand" aria-hidden="true"><span class="ico">🏢</span><b>Agent Office</b></div>
     <header class="lite-bar">
       <button id="lite-back" class="btn lp-icon lite-back hidden" type="button" aria-label="Back">←</button>
       <div class="lite-heading">

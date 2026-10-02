@@ -1,17 +1,50 @@
 @import './style.css';
 
-/* The 2D view (lite.html): a page that scrolls, made for a phone, rather than a HUD over the 3D office. */
+/* The 2D view (lite.html): an app of pages that scroll, for a phone or a desktop window, rather than a HUD
+   over the 3D office. It's drawn like the Maintenance chat window (ui/maintenance-chat.ts): white surfaces,
+   hairline borders, soft shadows and a blue accent, instead of the 3D office's thick ink outlines. */
 html, body { height: 100%; overflow: hidden; }
+body.lite {
+  --ink: #202938; --muted: #6b7484; --accent: #4564c7; --accent-soft: #eef2ff; --accent-line: #c7d2fe;
+  --paper: #f7f8fb; --paper-2: #f0f3f7; --line: #e7eaf0; --line-2: #dce1e8; --dot-ring: #2029381f;
+  --lift: 0 1px 2px #1118270d, 0 1px 3px #1118270f; --lift-2: 0 4px 16px #1118271a;
+  --radius: 12px; --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px; line-height: 1.5;
+}
 /* An app, not a page: the bar and the tabs stay put, and each page scrolls inside its own area. */
 body.lite { height: 100dvh; display: flex; flex-direction: column; background: var(--paper); -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+/* Buttons and windows the 2D view shares with the 3D office (style.css), in the same quiet look. */
+:where(body.lite) .btn { border: 1px solid var(--line-2); border-radius: 8px; box-shadow: none; font-weight: 500; transition: background .12s, border-color .12s; }
+:where(body.lite) .btn:hover { background: var(--paper-2); }
+:where(body.lite) .btn:active { transform: none; box-shadow: none; background: var(--line); }
+:where(body.lite) .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+:where(body.lite) .btn.primary:hover { background: #3a56b0; }
+:where(body.lite) .btn.danger { border-color: var(--bad); }
+:where(body.lite) .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:where(body.lite) .modal { background: #fff; border: 1px solid var(--line-2); border-radius: 16px; box-shadow: 0 24px 80px #11182740; }
+:where(body.lite) .modal header, :where(body.lite) .modal footer { background: #fff; border-color: var(--line); border-width: 1px; }
+:where(body.lite) .modal header h2 { font-weight: 650; }
+:where(body.lite) .modal textarea, :where(body.lite) .modal input[type=text], :where(body.lite) .modal input[type=password] { border: 1px solid var(--line-2); border-radius: 8px; }
+:where(body.lite) .modal textarea:focus, :where(body.lite) .modal input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+:where(body.lite) .backdrop, .sheet-backdrop { background: #1118274d; }
+:where(body.lite) .toast { background: #fff; border: 1px solid var(--line-2); border-radius: 10px; box-shadow: var(--lift-2); font-weight: 500; }
+:where(body.lite) .gh-card { border-width: 1px; border-color: var(--line); box-shadow: var(--lift); }
+:where(body.lite) .settings-nav { background: none; border-color: var(--line); border-width: 0 0 1px; }
+:where(body.lite) .settings-tab { font-size: 14px; font-weight: 500; border: 1px solid transparent; border-radius: 8px; }
+:where(body.lite) .settings-tab:hover { background: var(--paper-2); }
+:where(body.lite) .settings-tab.on { background: #e8edf9; color: #3b5293; border-color: transparent; box-shadow: none; font-weight: 600; }
+:where(body.lite) .setting { border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift); }
+:where(body.lite) .settings-head h3, :where(body.lite) .setting-head h4 { font-weight: 650; }
+:where(body.lite) .settings-head p { font-weight: 400; }
+:where(body.lite) .scope { border: 1px solid var(--line-2); font-weight: 600; }
 
 /* The shell: a top bar with the page's title, the page, and the tabs along the bottom. */
 :root { --tabbar: calc(62px + env(safe-area-inset-bottom)); --gutter: 12px; }
-.lite-bar { flex: none; position: relative; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px var(--gutter); padding-top: max(6px, env(safe-area-inset-top)); background: var(--paper-2); border-bottom: 3px solid var(--ink); min-height: 54px; }
+.lite-bar { flex: none; position: relative; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px var(--gutter); padding-top: max(6px, env(safe-area-inset-top)); background: #fff; border-bottom: 1px solid var(--line); min-height: 56px; }
 .lite-bar .btn { flex: none; justify-content: center; text-decoration: none; }
 .lite-heading { flex: 1; min-width: 0; }
-.lite-heading h1 { margin: 0; font-size: 18px; font-weight: 900; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lite-subtitle { margin: 0; font-size: 12px; font-weight: 800; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lite-heading h1 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lite-subtitle { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lite-subtitle[data-tone=live]::before, .lite-subtitle[data-tone=warn]::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--good); animation: lp-pulse 1.2s infinite; }
 .lite-subtitle[data-tone=warn] { color: #c9184a; } .lite-subtitle[data-tone=warn]::before { background: var(--bad); }
 @keyframes lp-pulse { 50% { opacity: .35; } }
@@ -21,38 +54,40 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lite-main { flex: 1; min-height: 0; width: 100%; max-width: 760px; margin: 0 auto; padding: 12px var(--gutter) 16px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .lite-main:has(> .lp-fill) { overflow: hidden; padding-bottom: 0; display: flex; flex-direction: column; }
 
-.lite-nav { flex: none; position: relative; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: var(--paper-2); border-top: 3px solid var(--ink); padding-bottom: env(safe-area-inset-bottom); }
-.lite-tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 59px; padding: 4px 2px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
-.lite-tab .ico { font-size: 22px; line-height: 1; }
-.lite-tab.on { color: var(--ink); background: #fff; box-shadow: inset 0 4px 0 var(--accent); }
-.lite-tab:active { background: var(--paper); }
+.lite-nav { flex: none; position: relative; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.lite-tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 59px; padding: 4px 2px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.lite-tab .ico { display: grid; place-items: center; width: 52px; height: 30px; border-radius: 999px; font-size: 20px; line-height: 1; transition: background .12s; }
+.lite-tab.on { color: var(--accent); }
+.lite-tab.on .ico { background: var(--accent-soft); }
+.lite-tab:active .ico { background: var(--paper-2); }
 .lite-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--accent); }
 .lite-tab .n { position: absolute; top: 3px; left: calc(50% + 8px); min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
 .lite-tab .n:empty { display: none; }
-/* A wide window: the bars line up with the page. */
-@media (min-width: 761px) { .lite-bar { padding-left: calc(50% - 368px); padding-right: calc(50% - 368px); } .lite-nav { padding-left: calc(50% - 380px); padding-right: calc(50% - 380px); } }
+
+/* The office's name heads the sidebar on a wide window; a phone has no room for it. */
+.lite-brand { display: none; }
 
 /* A card per worker, the ones waiting on someone first (see byUrgency). */
 .lite-workers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.lite-worker { display: flex; align-items: stretch; background: #fff; border: 3px solid var(--ink); border-radius: var(--radius); box-shadow: 0 3px 0 var(--ink); overflow: hidden; }
-.lite-worker.waiting { box-shadow: 0 3px 0 var(--ink), inset 6px 0 0 var(--bad); }
-.lite-worker.done.waiting { box-shadow: 0 3px 0 var(--ink), inset 6px 0 0 var(--good); }
-.lite-worker.exited, .lite-worker.offline { background: #f3f1ee; }
+.lite-worker { display: flex; align-items: stretch; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--lift); overflow: hidden; }
+.lite-worker.waiting { box-shadow: var(--lift), inset 4px 0 0 var(--bad); }
+.lite-worker.done.waiting { box-shadow: var(--lift), inset 4px 0 0 var(--good); }
+.lite-worker.exited, .lite-worker.offline { background: var(--paper-2); }
 .lite-card { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 12px 10px 12px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.lite-card:active { background: var(--paper-2); }
+.lite-card:hover, .lite-card:active { background: var(--paper); }
 .lite-card:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--accent); }
-.lite-card .dot { flex: none; width: 14px; height: 14px; margin-top: 4px; border-radius: 50%; border: 2px solid var(--ink); }
+.lite-card .dot { flex: none; width: 14px; height: 14px; margin-top: 4px; border-radius: 50%; border: 1px solid var(--dot-ring); }
 .lite-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.lite-name { font-size: 16px; font-weight: 900; }
-.lite-task { font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
-.lite-now { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lite-name { font-size: 16px; font-weight: 650; }
+.lite-task { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.lite-now { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .lite-worker.needs_input .lite-now { color: #c9184a; }
-.lite-sub { font-size: 12px; font-weight: 700; color: var(--muted); overflow-wrap: anywhere; }
+.lite-sub { font-size: 12px; font-weight: 500; color: var(--muted); overflow-wrap: anywhere; }
 .lite-state { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.lite-state small { font-size: 11px; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.lite-state small { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
 .lite-side { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 6px 10px 6px 0; }
 .lite-say { flex: none; width: 44px; height: 44px; padding: 0; justify-content: center; font-size: 18px; }
-.lite-empty { padding: 28px 12px; text-align: center; font-weight: 800; color: var(--muted); }
+.lite-empty { padding: 28px 12px; text-align: center; font-weight: 600; color: var(--muted); }
 
 
 /* The page scrolls here, so what floats over it stays put on the screen. */
@@ -63,7 +98,7 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 
 /* No zooming in on a box as you tap it (iOS does, for text under 16px). */
 .modal textarea, .modal input[type=text], .modal input[type=password], .modal select { font-size: 16px; }
-.lite-name .body p { margin: 0 0 12px; font-weight: 700; }
+.lite-name .body p { margin: 0 0 12px; font-weight: 500; }
 
 /* On a phone, the big windows take the whole screen; the small ones stay dialogs. */
 @media (max-width: 640px) {
@@ -80,9 +115,9 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 /* ---- Pages (lite/) ---- */
 .lp { display: flex; flex-direction: column; gap: 10px; }
 .lp.lp-wide { max-width: none; }
-.lp-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 8px 0 0; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.lp-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 10px 2px 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .lp-title { margin: 0; font-size: 20px; line-height: 1.25; overflow-wrap: anywhere; }
-.lp-note { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
+.lp-note { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
 .lp-note.bad, .lp-note .bad { color: var(--bad); }
 .lp-pad { padding: 0; }
 .lp-empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 28px 12px; text-align: center; color: var(--muted); }
@@ -90,7 +125,7 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lp-empty b { color: var(--ink); }
 .lp-empty p { margin: 0; font-size: 13px; font-weight: 600; max-width: 34ch; }
 .lp-loading { display: grid; place-items: center; padding: 30px; }
-.lp-chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: var(--paper-2); border: 2px solid rgba(43,45,66,.18); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; }
+.lp-chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--paper-2); border: 1px solid var(--line-2); color: var(--ink); max-width: 100%; overflow-wrap: anywhere; }
 .lp-chip.add, .lp-chip.del { background: none; border: 0; padding: 1px 2px; }
 .lp-chip.add, .add { color: #2a9d4b; }
 .lp-chip.del, .del { color: #c3423f; }
@@ -98,22 +133,26 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lp-count { margin-left: 6px; }
 
 /* Rows: the big tappable lines of a menu. */
-.lp-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px; border: 3px solid var(--ink); border-radius: 14px; background: #fff; box-shadow: 0 3px 0 var(--ink); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.lp-row:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
-.lp-row.on { background: #fff1de; }
-.lp-row .ico { flex: none; width: 28px; text-align: center; font-size: 22px; }
+.lp-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: var(--lift); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.lp-row { transition: background .12s, border-color .12s; }
+.lp-row:hover { border-color: var(--line-2); background: #fcfcfd; }
+.lp-row:active { background: var(--paper-2); }
+.lp-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lp-row.on { background: var(--accent-soft); border-color: var(--accent-line); }
+.lp-row .ico { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--paper); font-size: 20px; }
 .lp-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.lp-row .txt b { font-size: 16px; overflow-wrap: anywhere; }
-.lp-row .txt small { font-size: 12px; font-weight: 700; color: var(--muted); overflow-wrap: anywhere; }
-.lp-row .chev { flex: none; font-size: 22px; font-weight: 900; color: var(--muted); }
+.lp-row .txt b { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.lp-row .txt small { font-size: 12px; font-weight: 500; color: var(--muted); overflow-wrap: anywhere; }
+.lp-row .chev { flex: none; font-size: 20px; color: #a0a8b6; }
 .lp-floorbtn { background: #fff; }
-.lp-row .n { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--ink); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
+.lp-row .n { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; }
 
 /* A row of choices, as touch-sized tabs. */
 .lp-seg { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: none; }
 .lp-seg::-webkit-scrollbar { display: none; }
-.lp-seg button { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 6px 7px; gap: 4px; border: 3px solid var(--ink); border-radius: 12px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 800; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.lp-seg button.on { background: var(--ink); color: #fff; }
+.lp-seg button { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 6px 7px; gap: 4px; border: 1px solid var(--line-2); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.lp-seg button:hover { background: var(--paper); }
+.lp-seg button.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .lp-seg .n { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; }
 
 .lp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -121,31 +160,31 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lp-bar { display: flex; flex-direction: column; gap: 8px; }
 .lp-bar .provider-pick { margin: 0; }
 
-.lp-search, .lp input[type=text], .lp input[type=search], .lp input[type=password], .lp textarea, .lp select { width: 100%; font: inherit; font-size: 16px; border: 3px solid var(--ink); border-radius: 12px; padding: 10px 12px; background: #fff; color: var(--ink); outline: none; }
+.lp-search, .lp input[type=text], .lp input[type=search], .lp input[type=password], .lp textarea, .lp select { width: 100%; font: inherit; font-size: 16px; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; background: #fff; color: var(--ink); outline: none; }
 .lp textarea { resize: vertical; }
-.lp input:focus, .lp textarea:focus, .lp select:focus { border-color: var(--accent); }
-.lp-field { display: flex; flex-direction: column; gap: 4px; font-weight: 800; font-size: 14px; }
+.lp input:focus, .lp textarea:focus, .lp select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lp-field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 14px; }
 
 /* Cards: issues, PRs, tasks. */
 .lp-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.lp-card { display: flex; align-items: stretch; gap: 0; background: #fff; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink); overflow: hidden; flex-wrap: wrap; }
+.lp-card { display: flex; align-items: stretch; gap: 0; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--lift); overflow: hidden; flex-wrap: wrap; }
 .lp-card.lp-form, .lp-card.lp-service, .lp-card.lp-task, .lp-card.lp-now { flex-direction: column; padding: 12px; gap: 10px; }
 .lp-cardbtn { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.lp-cardbtn:active { background: var(--paper-2); }
+.lp-cardbtn:hover, .lp-cardbtn:active { background: var(--paper); }
 .lp-cardbody { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lp-quick { align-self: center; margin-right: 10px; min-width: 44px; height: 44px; justify-content: center; padding: 0 6px; font-size: 14px; }
-.lp-num { font-size: 12px; font-weight: 900; color: var(--muted); }
+.lp-num { font-size: 12px; font-weight: 650; color: var(--muted); }
 .lp-ttl { font-size: 15px; overflow-wrap: anywhere; }
 .lp-link { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); text-align: left; text-decoration: underline; cursor: pointer; }
 .lp-meta { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
 .lp-meta .label { font-size: 12px; }
-.lp-task.running { background: #fffbe6; } .lp-task.done { background: #f3f1ee; }
+.lp-task.running { background: #fffbeb; } .lp-task.done { background: var(--paper-2); }
 .lp-filters { margin-top: -2px; }
 .lp-labels { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .lp-labels:empty { display: none; }
-.lp-labelpick { flex: none; border: 3px solid transparent; border-radius: 999px; background: none; padding: 1px; cursor: pointer; }
-.lp-labelpick[aria-pressed=true] { border-color: var(--ink); }
-.lp-limit { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+.lp-labelpick { flex: none; border: 1px solid transparent; border-radius: 999px; background: none; padding: 1px; cursor: pointer; }
+.lp-labelpick[aria-pressed=true] { border-color: var(--accent); }
+.lp-limit { display: flex; align-items: center; gap: 10px; font-weight: 600; }
 .lp-limit span { flex: 1; }
 .lp-limit .btn { width: 44px; height: 44px; justify-content: center; font-size: 20px; padding: 0; }
 
@@ -160,32 +199,32 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 
 /* Changed files, inline diffs. */
 .lp-files { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.lp-file { border: 3px solid var(--ink); border-radius: 12px; background: #fff; overflow: hidden; }
+.lp-file { border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
 .lp-file > button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 8px 10px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .lp-file .path { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; overflow-wrap: anywhere; }
-.lp-file .st { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; font-size: 12px; font-weight: 900; background: #e0f2fe; }
+.lp-file .st { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; font-size: 12px; font-weight: 650; background: #e0f2fe; }
 .lp-file .st.A { background: #caffbf; } .lp-file .st.D { background: #ffd6e0; }
-.lp-file .pm { flex: none; font-size: 12px; font-weight: 800; }
-.lp-file .dirty { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); border: 2px solid var(--ink); }
+.lp-file .pm { flex: none; font-size: 12px; font-weight: 600; }
+.lp-file .dirty { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); border: 1px solid var(--dot-ring); }
 .lp-file .lp-actions { padding: 0 10px 10px; }
-.lp-diff { overflow-x: auto; border-top: 3px solid var(--ink); background: #fbfbfd; -webkit-overflow-scrolling: touch; }
+.lp-diff { overflow-x: auto; border-top: 1px solid var(--line); background: var(--paper); -webkit-overflow-scrolling: touch; }
 .lp-diff .diff-lines, .lp-diff .pd-file, .lp-diff .gh-diff { min-width: max-content; font-size: 12px; }
 
 /* One worker, one agent chat. */
-.lp-hero { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #fff; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink); }
-.lp-hero .dot { flex: none; width: 16px; height: 16px; margin-top: 4px; border-radius: 50%; border: 2px solid var(--ink); }
+.lp-hero { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--lift); }
+.lp-hero .dot { flex: none; width: 16px; height: 16px; margin-top: 4px; border-radius: 50%; border: 1px solid var(--dot-ring); }
 .lp-hero > div { flex: 1; min-width: 0; }
 .lp-hero b { font-size: 18px; }
-.lp-hero p { margin: 2px 0 0; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.lp-hero p { margin: 2px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
 .lp-now { color: #c9184a; }
-.lp-warn { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 3px solid var(--ink); border-radius: 12px; background: #fff3c4; font-weight: 800; }
+.lp-warn { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid #fde68a; border-radius: 12px; background: #fffbeb; font-weight: 600; }
 .lp-facts { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 14px; }
-.lp-facts dt { color: var(--muted); font-weight: 800; }
-.lp-facts dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.lp-facts dt { color: var(--muted); font-weight: 600; }
+.lp-facts dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
 .lp-prompt { font-size: 14px; } .lp-prompt p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.lp-switch { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 3px solid var(--ink); border-radius: 14px; background: #fff; }
+.lp-switch { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
 .lp-switch input { flex: none; width: 28px; height: 28px; margin: 2px 0 0; accent-color: var(--accent); }
-.lp-switch .txt { display: flex; flex-direction: column; gap: 2px; } .lp-switch small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.lp-switch .txt { display: flex; flex-direction: column; gap: 2px; } .lp-switch small { font-size: 12px; font-weight: 500; color: var(--muted); }
 
 /* Chat pages: the composer sits above the tab bar. */
 .lp-composer { display: flex; flex-direction: column; gap: 6px; }
@@ -196,20 +235,20 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lp-chatform input { flex: 1; min-width: 0; }
 .lp-chatlog, .lp-chatlog.maintenance-chat-messages { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: visible; max-height: none; padding: 0; }
 .lite-chat-line { display: flex; gap: 8px; align-items: flex-start; } .lite-chat-line p { margin: 0; overflow-wrap: anywhere; }
-.lite-chat-line .dot, .lite-person .dot { flex: none; width: 12px; height: 12px; margin-top: 5px; border-radius: 50%; border: 2px solid var(--ink); }
-.lite-chat-line small, .lite-person small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.lite-chat-line .dot, .lite-person .dot { flex: none; width: 12px; height: 12px; margin-top: 5px; border-radius: 50%; border: 1px solid var(--dot-ring); }
+.lite-chat-line small, .lite-person small { font-size: 12px; font-weight: 500; color: var(--muted); }
 .lite-person { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--paper-2); } .lite-person > span:last-child { display: flex; flex-direction: column; }
-.lp-chatstatus { font-weight: 800; }
+.lp-chatstatus { font-weight: 600; }
 .lp-subview .maintenance-work-panel, .lp-subview { overflow-wrap: anywhere; }
 .lp-subview pre { overflow-x: auto; }
 .lp-history { display: flex; flex-direction: column; gap: 8px; }
 
-.lp-spend { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--paper-2); font-weight: 700; }
+.lp-spend { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 10px; padding: 8px 0; border-bottom: 1px solid var(--paper-2); font-weight: 500; }
 .lp-spend small { flex-basis: 100%; font-size: 12px; color: var(--muted); }
 .lp-spend .bad { color: var(--bad); } .lp-spend .warn { color: #b7791f; }
-.lp-meter { height: 10px; margin: 4px 0 8px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; overflow: hidden; }
+.lp-meter { height: 10px; margin: 4px 0 8px; border: 1px solid var(--dot-ring); border-radius: 999px; background: #fff; overflow: hidden; }
 .lp-meter i { display: block; height: 100%; background: var(--good); } .lp-meter.near i { background: var(--warn); } .lp-meter.over i { background: var(--bad); }
-.lp-whiteboard { flex: 1; min-height: 0; border: 3px solid var(--ink); border-radius: 14px; overflow: hidden; background: #fff; position: relative; }
+.lp-whiteboard { flex: 1; min-height: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #fff; position: relative; }
 .lp-about { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; } .lp-about .ico { font-size: 24px; } .lp-about p { margin: 2px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
 .lp-toc { margin-bottom: 8px; }
 .lp-repos { display: flex; flex-direction: column; gap: 8px; }
@@ -223,7 +262,7 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lp-top { flex: none; display: flex; flex-direction: column; gap: 8px; }
 .lp-top .lp-seg { padding-bottom: 2px; }
 .lp-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
-.lp-bottom { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px var(--gutter) 10px; margin: 0 calc(var(--gutter) * -1); background: var(--paper-2); border-top: 3px solid var(--ink); }
+.lp-bottom { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px var(--gutter) 10px; margin: 0 calc(var(--gutter) * -1); background: #fff; border-top: 1px solid var(--line); }
 .lp-bottom .lp-composer-row { gap: 8px; }
 .lp-scroll > .lp-chatlog { flex: none; }
 .lp-fill .lp-chatform { padding: 0; }
@@ -236,23 +275,25 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 /* A page inside a tab is a screen of its own: no tab bar, so it has all the room (← goes back). */
 body[data-root="0"] .lite-nav { display: none; }
 body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-inset-bottom); }
-.lp-icon { width: 42px; height: 42px; min-width: 42px; padding: 0; border-radius: 50%; justify-content: center; font-size: 18px; line-height: 1; box-shadow: 0 2px 0 var(--ink); }
+.lp-icon { width: 40px; height: 40px; min-width: 40px; padding: 0; border-radius: 10px; justify-content: center; font-size: 17px; line-height: 1; }
+:where(body.lite) .lp-icon { border-color: transparent; background: transparent; }
+:where(body.lite) .lp-icon:hover { background: var(--paper-2); }
 .lite-back { font-size: 20px; }
 
 /* Sheets: menus, pickers and short forms that slide up over the page. */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center; background: rgba(43,45,66,.45); animation: fade .15s; }
 .sheet-backdrop.leaving { opacity: 0; transition: opacity .15s; }
-.sheet { width: min(640px, 100%); max-height: 86dvh; display: flex; flex-direction: column; background: var(--paper); border: 3px solid var(--ink); border-bottom: 0; border-radius: 22px 22px 0 0; box-shadow: 0 -4px 0 var(--ink); animation: lp-rise .2s ease-out; padding-bottom: env(safe-area-inset-bottom); }
+.sheet { width: min(640px, 100%); max-height: 86dvh; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-bottom: 0; border-radius: 22px 22px 0 0; box-shadow: 0 -12px 48px #1118271f; animation: lp-rise .2s ease-out; padding-bottom: env(safe-area-inset-bottom); }
 .sheet.tall { height: 86dvh; }
 @keyframes lp-rise { from { transform: translateY(40px); opacity: .4; } }
-.sheet-grab { flex: none; width: 44px; height: 5px; margin: 8px auto 0; border-radius: 999px; background: rgba(43,45,66,.25); }
+.sheet-grab { flex: none; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--line-2); }
 .sheet-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 16px 10px; }
 .sheet-head b { flex: 1; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-head .close { position: static; width: 40px; height: 40px; border-radius: 50%; padding: 0; justify-content: center; }
 .sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; overscroll-behavior: contain; }
 .sheet-list, .sheet-stack { display: flex; flex-direction: column; gap: 10px; }
-.sheet-body .lp-row.danger { background: #ffd6e0; }
-.sheet-body input[type=search], .sheet-body input[type=text] { width: 100%; font: inherit; font-size: 16px; border: 3px solid var(--ink); border-radius: 12px; padding: 10px 12px; background: #fff; }
+.sheet-body .lp-row.danger { background: #fff1f2; border-color: #fecdd3; color: #a13143; }
+.sheet-body input[type=search], .sheet-body input[type=text] { width: 100%; font: inherit; font-size: 16px; border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; background: #fff; }
 
 /* Chat: the messages get the screen. */
 .lp-chatscroll { gap: 2px; padding: 4px 2px 10px; }
@@ -263,26 +304,76 @@ body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-i
 .lp-msg.from-user { align-self: flex-end; align-items: flex-end; }
 .lp-msg.from-agent { align-self: flex-start; align-items: flex-start; }
 .lp-msg-meta { display: flex; align-items: center; gap: 6px; padding: 0 6px 2px; font-size: 12px; color: var(--muted); }
-.lp-msg-meta b { color: var(--ink); } .lp-msg-meta .dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ink); }
-.lp-bubble { padding: 9px 13px; border: 3px solid var(--ink); border-radius: 18px; background: #fff; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
-.lp-msg.from-user .lp-bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
-.lp-msg.from-agent .lp-bubble { border-bottom-left-radius: 6px; }
+.lp-msg-meta b { color: var(--ink); } .lp-msg-meta .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--dot-ring); }
+.lp-bubble { padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: #fafbfc; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; min-width: 0; max-width: 100%; }
+.lp-msg.from-user .lp-bubble { background: var(--accent-soft); border-color: #e0e7ff; color: var(--ink); border-bottom-right-radius: 4px; }
+.lp-msg.from-agent .lp-bubble { border-bottom-left-radius: 4px; }
 .lp-bubble p { margin: 0; white-space: pre-wrap; }
 .lp-bubble .md p { white-space: normal; } .lp-bubble .md > :first-child { margin-top: 0; } .lp-bubble .md > :last-child { margin-bottom: 0; }
 .lp-bubble pre { overflow-x: auto; max-width: 100%; position: relative; } .lp-bubble img { max-width: 100%; height: auto; }
-.lp-msg-pending { padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--muted); }
-.lp-chat-empty { align-self: center; text-align: center; padding: 40px 20px; color: var(--muted); } .lp-chat-empty h3 { margin: 0 0 6px; color: var(--ink); } .lp-chat-empty p { margin: 0; font-size: 14px; font-weight: 600; }
-.lp-typing { align-self: flex-start; display: flex; gap: 4px; margin: 8px 4px; padding: 11px 14px; border: 3px solid var(--ink); border-radius: 18px 18px 18px 6px; background: #fff; }
-.lp-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); animation: lp-bounce 1s infinite; } .lp-typing i:nth-child(2) { animation-delay: .15s; } .lp-typing i:nth-child(3) { animation-delay: .3s; }
+.lp-msg-pending { padding: 2px 8px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.lp-chat-empty { align-self: center; text-align: center; padding: 40px 20px; color: var(--muted); } .lp-chat-empty h3 { margin: 0 0 6px; color: var(--ink); } .lp-chat-empty p { margin: 0; font-size: 14px; font-weight: 400; }
+.lp-typing { align-self: flex-start; display: flex; gap: 4px; margin: 8px 4px; padding: 11px 14px; border: 1px solid var(--line); border-radius: 14px 14px 14px 4px; background: #fafbfc; }
+.lp-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: lp-bounce 1s infinite; } .lp-typing i:nth-child(2) { animation-delay: .15s; } .lp-typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes lp-bounce { 0%, 60%, 100% { transform: none; opacity: .35; } 30% { transform: translateY(-4px); opacity: 1; } }
-.lp-jump { position: sticky; bottom: 6px; align-self: flex-end; flex: none; width: 42px; height: 42px; margin-top: -42px; border: 3px solid var(--ink); border-radius: 50%; background: #fff; box-shadow: 0 3px 0 var(--ink); font-size: 18px; font-weight: 900; cursor: pointer; z-index: 2; }
+.lp-jump { position: sticky; bottom: 6px; align-self: flex-end; flex: none; width: 42px; height: 42px; margin-top: -42px; border: 1px solid var(--line-2); border-radius: 50%; background: #fff; box-shadow: var(--lift-2); font-size: 18px; font-weight: 650; cursor: pointer; z-index: 2; }
 .lp-bottom:has(.lp-compose) { gap: 6px; padding-top: 8px; }
 .lp-compose { display: flex; align-items: flex-end; gap: 8px; }
-.lp-compose textarea, .lp-compose input[type=text] { flex: 1; min-width: 0; min-height: 44px; max-height: 140px; padding: 10px 14px; border: 3px solid var(--ink); border-radius: 22px; background: #fff; font: inherit; font-size: 16px; line-height: 1.3; resize: none; outline: none; }
-.lp-compose textarea:focus, .lp-compose input:focus { border-color: var(--accent); }
+.lp-compose textarea, .lp-compose input[type=text] { flex: 1; min-width: 0; min-height: 44px; max-height: 140px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: 22px; background: #fff; font: inherit; font-size: 16px; line-height: 1.3; resize: none; outline: none; }
+.lp-compose textarea:focus, .lp-compose input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .lp-send { flex: none; width: 44px; height: 44px; padding: 0; border-radius: 50%; justify-content: center; font-size: 18px; }
 .lp-attach { flex: none; }
-.lp-banner { margin: 0; padding: 7px 12px; border-radius: 12px; background: #fff3c4; border: 2px solid rgba(43,45,66,.2); font-size: 12px; font-weight: 800; line-height: 1.35; }
-.lp-banner.bad { background: #ffd6e0; }
+.lp-banner { margin: 0; padding: 7px 12px; border-radius: 10px; background: #fffbeb; border: 1px solid #00000010; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.lp-banner.bad { background: #fff1f2; color: #a13143; }
 .lp-tray { padding: 0; } .lp-tray .maintenance-image-drafts { display: flex; gap: 6px; flex-wrap: wrap; }
 .lp-bubble .md { padding: 0; margin: 0; background: none; border: 0; }
+
+/* A desktop window: the tabs become a sidebar (like the Maintenance chat's conversation list), they stay
+   there on pages inside a tab, and the page takes the rest of the width, with lists of cards and rows
+   laid out in as many columns as fit rather than one phone-wide column in the middle. */
+@media (min-width: 960px) {
+  :root { --gutter: 28px; }
+  body.lite { display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: 'brand bar' 'nav main'; }
+  .lite-brand { grid-area: brand; display: flex; align-items: center; gap: 10px; padding: 0 18px; min-height: 56px; background: var(--paper); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 15px; }
+  .lite-brand .ico { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #fff; border: 1px solid var(--line); font-size: 17px; }
+  .lite-brand b { font-weight: 650; letter-spacing: -.01em; }
+  .lite-bar { grid-area: bar; padding: 8px var(--gutter); }
+  .lite-main { grid-area: main; max-width: none; padding: 20px var(--gutter) 28px; }
+  .lite-main:has(> .lp-fill) { padding-bottom: 20px; }
+  body.lite[data-root] .lite-nav { grid-area: nav; display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; background: var(--paper); border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
+  .lite-tab { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 40px; padding: 6px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #3a4558; }
+  .lite-tab .ico { width: 24px; height: 24px; border-radius: 0; background: none; font-size: 17px; }
+  .lite-tab.on .ico, .lite-tab:active .ico { background: none; }
+  .lite-tab:hover { background: var(--paper-2); }
+  .lite-tab.on { background: #e8edf9; color: #3b5293; font-weight: 600; }
+  .lite-tab .n { position: static; margin-left: auto; }
+  .lite-tab:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+
+  /* Pages: menus of rows and lists of cards fill the width in columns; headings, notes and forms span it. */
+  .lp:not(.lp-fill) { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; gap: 12px; max-width: 1400px; margin: 0 auto; }
+  .lp:not(.lp-fill) > :not(.lp-row) { grid-column: 1 / -1; }
+  .lp:not(.lp-fill) > .lp-row { height: 100%; }
+  .lite-workers, .lp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; gap: 12px; }
+  .lp-cards > .lp-card.lp-form, .lp-cards > .lite-empty, .lite-workers > .lite-empty, .lp-cards > .lp-note, .lp-cards > .lp-empty { grid-column: 1 / -1; }
+  /* Reading pages (an issue, a doc, a worker) keep lines a readable length. */
+  .lp-thread, .lp .md, .lp-hero, .lp-facts, .lp-prompt { max-width: 980px; }
+  /* Pages with a fixed top and bottom (chats, boards, settings): a centred column like the Maintenance chat's
+     conversation, with the composer as a card at its foot rather than a strip across the window. */
+  .lp-fill { width: 100%; max-width: 1100px; margin: 0 auto; }
+  .lp-bottom { margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--lift); }
+  .lp-msg { max-width: min(80%, 760px); }
+  .lp-seg button { flex: 0 1 auto; padding: 6px 14px; }
+  .lp-actions .btn { flex: 0 1 auto; }
+  /* Settings: its sections down the side again, as in the 3D office's settings window. */
+  .lite-main .lp-fill .settings-body { flex-direction: row; gap: 20px; }
+  .lite-main .lp .settings-nav { flex-direction: column; flex: none; width: 210px; overflow-y: auto; padding: 0 16px 0 0; border-width: 0 1px 0 0; }
+  .lite-main .lp .settings-tab { min-height: 40px; width: 100%; }
+  .lite-main .lp-fill .settings-pane { padding: 0 4px 24px; }
+
+  /* Sheets open as a centred dialog instead of sliding up from the bottom. */
+  .sheet-backdrop { align-items: center; padding: 24px; }
+  .sheet { border-bottom: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 80px #11182740; max-height: min(720px, 86dvh); padding-bottom: 0; }
+  .sheet.tall { height: min(720px, 86dvh); }
+  .sheet-grab { visibility: hidden; height: 0; margin-top: 4px; }
+  #toasts, .conn { top: 72px; }
+}
