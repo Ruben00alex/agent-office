@@ -104,3 +104,17 @@ test('archive pages older messages without losing the newest page and skips malf
   assert.equal(first.messages.length, 5);
   assert.equal(first.hasOlder, false);
 });
+
+test('archive titles started issues from the issue and other chats with the titler', async (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'maintenance-titles-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const seen: string[] = [];
+  const archive = new MaintenanceChatArchive(dir, undefined, undefined, async (opening) => { seen.push(opening); return '"Fix the jukebox volume."\nextra'; });
+  archive.capture({ id: 'issue', createdAt: 1 } as WorkerInfo, [{ id: 'a', role: 'user', content: 'Implement Agent Office issue #12: Add a dartboard\nhttps://x', at: 2 }]);
+  archive.capture({ id: 'chat', createdAt: 1 } as WorkerInfo, [{ id: 'b', role: 'user', content: 'the jukebox is way too loud please fix', at: 3 }]);
+  assert.equal(archive.list().find(c => c.id === 'issue')!.title, '#12 Add a dartboard');
+  assert.equal(archive.list().find(c => c.id === 'chat')!.title, 'the jukebox is way too loud please fix');
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(archive.list().find(c => c.id === 'chat')!.title, 'Fix the jukebox volume');
+  assert.deepEqual(seen, ['the jukebox is way too loud please fix']);
+});

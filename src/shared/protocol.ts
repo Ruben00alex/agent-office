@@ -109,6 +109,8 @@ export interface MaintenanceConversation {
   /** The floor whose Product Lead had it (the Maintenance agent's belong to the whole office). */
   floor?: string;
   title: string;
+  /** True once the title was written for the conversation (by a model, or taken from an issue prompt) rather than cut from its first message. */
+  titled?: boolean;
   createdAt: number;
   updatedAt: number;
   messages: MaintenanceChatMessage[];

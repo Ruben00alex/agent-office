@@ -46,10 +46,10 @@ import { WB_MAX_FILE_BYTES } from '../shared/whiteboard.js';
 import { DROP_MAX_BYTES } from '../shared/drops.js';
 import { MAX_FLOORS } from '../shared/floors.js';
 import { lookFromSeed, sanitizeLook } from '../shared/avatar.js';
-import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree } from './maintenance.js';
+import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree, runMaintenanceModel } from './maintenance.js';
 import { draftMaintenanceIssue, isIssueWriter } from './maintenance-issue-draft.js';
 import { IssueJobs } from './maintenance-issue-jobs.js';
-import { MaintenanceChatArchive } from './maintenance-chat.js';
+import { MaintenanceChatArchive, TITLE_BRIEF } from './maintenance-chat.js';
 import { MaintenanceImages, MaintenanceWork, MAINTENANCE_IMAGE_MAX } from './maintenance-work.js';
 import { MaintenanceBoard } from './maintenance-board.js';
 import { MaintenanceStackKeeper, stackTree } from './maintenance-stack.js';
@@ -666,8 +666,13 @@ export async function startServer(cfg: Config) {
     });
   };
 
-  const maintenanceHistory = new MaintenanceChatArchive(cfg.dataDir);
-  const productHistory = new MaintenanceChatArchive(cfg.dataDir, 'product-chat-archive.json', 'Product Lead conversation');
+  // Titles come from haiku reading just the opening message, so the token cost stays tiny.
+  const titler = async (opening: string) => {
+    const r = await runMaintenanceModel(`${TITLE_BRIEF}\n\nMessage:\n${opening}`, 'haiku', { cli: 'claude' });
+    return 'answer' in r ? r.answer : undefined;
+  };
+  const maintenanceHistory = new MaintenanceChatArchive(cfg.dataDir, undefined, undefined, titler);
+  const productHistory = new MaintenanceChatArchive(cfg.dataDir, 'product-chat-archive.json', 'Product Lead conversation', titler);
   const maintenanceImages = new MaintenanceImages(cfg.dataDir);
   const issueAs = new Map<string, ReturnType<typeof signins.ghAs>>();
   const issueJobs = new IssueJobs(async (job) => {

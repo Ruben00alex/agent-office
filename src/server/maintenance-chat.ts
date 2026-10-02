@@ -94,11 +94,22 @@ export class MaintenanceTranscriptReader {
 
 const validMessage = (m: any): m is MaintenanceChatMessage => m && typeof m.id === 'string' && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string' && m.content.length <= MAX_CONTENT && Number.isFinite(m.at);
 
+const ISSUE_PROMPT = /^Implement Agent Office issue #(\d+): (.+)/;
+export const TITLE_BRIEF = 'Write a title of at most 6 words for a conversation that opens with the message below. Reply with only the title: no quotes, no trailing punctuation.';
+
+/** Cheap title for a conversation: the issue's own title for started issues (every one opens with the same sentence), else the opening cut short. */
+export function conversationTitle(first: string, fallback: string): { title: string; final: boolean } {
+  const issue = ISSUE_PROMPT.exec(first);
+  if (issue) return { title: `#${issue[1]} ${issue[2]}`.slice(0, 100), final: true };
+  return { title: (first || fallback).replace(/\s+/g, ' ').slice(0, 100), final: false };
+}
+
 /** Shared office history survives worker departure, worktree deletion and office restart. */
 export class MaintenanceChatArchive {
   private file: string;
   private conversations: MaintenanceConversation[] = [];
-  constructor(dir: string, name = 'maintenance-chat-archive.json', private fallbackTitle = 'Maintenance conversation') {
+  /** `titler` turns a conversation's opening message into a short title (a tiny model, to keep token use low); undefined keeps the cut-down opening. */
+  constructor(dir: string, name = 'maintenance-chat-archive.json', private fallbackTitle = 'Maintenance conversation', private titler?: (opening: string) => Promise<string | undefined>) {
     mkdirSync(dir, { recursive: true });
     this.file = path.join(dir, name);
     try {
@@ -136,11 +147,32 @@ export class MaintenanceChatArchive {
     }
     if (!changed) return;
     conversation.messages.sort((a, b) => a.at - b.at);
-    conversation.title = (conversation.messages.find(m => m.role === 'user')?.content ?? this.fallbackTitle).replace(/\s+/g, ' ').slice(0, 100);
+    const first = conversation.messages.find(m => m.role === 'user')?.content ?? '';
+    if (!conversation.titled) {
+      const { title, final } = conversationTitle(first, this.fallbackTitle);
+      conversation.title = title;
+      if (final) conversation.titled = true;
+    }
     conversation.updatedAt = Math.max(conversation.updatedAt, ...incoming.map(m => m.at));
     const next = [...this.conversations.filter(c => c.id !== worker.id), conversation];
     writeFileSync(this.file + '.tmp', JSON.stringify(next), { mode: 0o600 });
     renameSync(this.file + '.tmp', this.file);
     this.conversations = next;
+    if (!conversation.titled && first && this.titler) void this.retitle(worker.id, first);
+  }
+  private titling = new Set<string>();
+  private async retitle(id: string, first: string) {
+    if (this.titling.has(id)) return;
+    this.titling.add(id);
+    try {
+      const raw = await this.titler!(first.slice(0, 600));
+      const title = raw?.split('\n')[0].replace(/^["'`\s]+|["'`.\s]+$/g, '').slice(0, 100);
+      const c = this.conversations.find(c => c.id === id);
+      if (!title || !c) return;
+      const next = this.conversations.map(x => x.id === id ? { ...x, title, titled: true } : x);
+      writeFileSync(this.file + '.tmp', JSON.stringify(next), { mode: 0o600 });
+      renameSync(this.file + '.tmp', this.file);
+      this.conversations = next;
+    } catch { /* Keep the cut-down opening as the title. */ } finally { this.titling.delete(id); }
   }
 }
