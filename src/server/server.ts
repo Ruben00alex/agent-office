@@ -1,3 +1,4 @@
+import { askWork, workChatModel } from './work-chat.js';
 import http from 'node:http';
 import https from 'node:https';
 import { randomBytes } from 'node:crypto';
@@ -2026,6 +2027,22 @@ export async function startServer(cfg: Config) {
         c.attached.delete(wid);
         c.typingAt.delete(wid);
         workerFloor(wid)?.workers.detach(wid, c.id);
+        break;
+      }
+      case 'worker.work.ask': {
+        const id = str(msg.id, 32);
+        const question = str(msg.question, 1000).trim();
+        if (!id || !question) break;
+        const w = worker(msg.workerId);
+        const model = workChatModel(w?.info.provider) ?? '';
+        const reply = (result: { answer: string } | { error: string }) => sendTo(c, { t: 'worker.work.answer', id, model, ...result });
+        if (!w || w.info.kind !== 'agent') { reply({ error: 'No such worker' }); break; }
+        if (!model) { reply({ error: 'Work chat supports Claude and GPT workers.' }); break; }
+        if (c.asking) { reply({ error: 'Please wait for your current question to finish.' }); break; }
+        c.asking = true;
+        void askWork(w.info.provider!, question, w.floor.workers.workSnapshot(w.wid))
+          .then(reply).catch(() => reply({ error: 'Could not answer. Try again.' }))
+          .finally(() => { c.asking = false; });
         break;
       }
       case 'worker.prompt': {

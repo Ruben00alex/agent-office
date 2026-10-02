@@ -374,6 +374,15 @@ export class WorkerManager {
     return this.workers.get(id)?.info;
   }
 
+  /** Bounded observer snapshot; no terminal attachment or session changes. */
+  workSnapshot(id: string) {
+    const w = this.workers.get(id);
+    if (!w) return undefined;
+    return { name: w.info.name, status: w.info.status, task: w.info.task, activity: w.info.activity?.slice(0, 300),
+      prompts: w.prompts.slice(-3).map(p => p.slice(0, 600)),
+      tools: w.tools.slice(-8).map(t => t.slice(0, 300)) };
+  }
+
   /** The account a worker runs as (see RunAs), if not the office. */
   ownerOf(id: string): string | undefined {
     return this.workers.get(id)?.owner;

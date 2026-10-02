@@ -120,3 +120,7 @@ The maintenance closet has a post-it issues board on the wall behind Maintenance
 At the Maintenance kiosk, **E** opens the review controls: read a stacked commit and its diff, **Correct this change** or **Request / correct** to send a follow-up, and **Watch / answer in terminal** to inspect the session or answer a permission prompt. Terminal access takes you to the agent’s floor if needed; corrections always reach the one existing Maintenance session. Nothing ships until you press the stack’s ship button.
 
 Finished desk workers can make room for queued tasks when office capacity is full; workers being viewed, in a meeting, or waiting for input stay in place. Worktrees containing work are preserved. Handing a new issue card to a worker (including **Hand to a worker** in the 2D view) starts a fresh conversation in its existing workspace. **Ask a worker** and terminal prompts continue the current conversation.
+
+### Ask about a worker's work
+
+Open a Claude or GPT worker's terminal in either the 3D or 2D office and choose **💬 Ask about work**. Ask a short question to get a concise answer from Claude Haiku or GPT Luna, using the worker's status, task label, and a bounded snapshot of recent prompts and tool activity. This is a separate observer chat: it never sends instructions to the worker or interrupts its work. Each question makes one ephemeral model call, without sending earlier chat history. The server allows one outstanding question per person; failed or unavailable models show an error you can retry. Close with ✕ or Esc to return to the office.

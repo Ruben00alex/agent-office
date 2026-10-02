@@ -1227,6 +1227,7 @@ export type ClientMsg =
   | { t: 'worker.attach'; workerId: string }
   | { t: 'worker.detach'; workerId: string }
   /** `newTask` (or an issue card) starts a fresh conversation; ordinary prompts continue the current task. */
+  | { t: 'worker.work.ask'; workerId: string; id: string; question: string }
   | { t: 'worker.prompt'; workerId: string; prompt: string; issue?: number; newTask?: boolean }
   /**
    * A prompt for the agent standing by a board (`deskId` is its kiosk, see STATIONS in layout). It's
@@ -1533,6 +1534,7 @@ export type ServerMsg =
   | ({ t: 'wb.pointer'; id: string; selected?: string[] } & WbPointer)
   | { t: 'usage'; state: UsageState }
   | { t: 'limits'; state: PlanLimits }
+  | { t: 'worker.work.answer'; id: string; model: string; answer?: string; error?: string }
   | { t: 'codex.limits'; state: PlanLimits }
   | { t: 'queue'; state: QueueState }
   | { t: 'meeting'; state: MeetingState }
