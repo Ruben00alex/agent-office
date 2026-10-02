@@ -2,6 +2,9 @@
 
 import type { MachineState } from './protocol.js';
 
+/** The highest worker limit there is: past this it isn't a limit. */
+export const MAX_WORKER_LIMIT = 500;
+
 /** The office has as many workers as it takes. */
 export function officeFull(s: MachineState): boolean {
   return s.limit !== undefined && s.workers >= s.limit;

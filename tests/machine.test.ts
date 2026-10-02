@@ -39,14 +39,15 @@ test('no limit until one is set; then hiring past it is refused, across restarts
   assert.equal(again.full(), undefined);
 });
 
-test('--max-workers is a ceiling the office can go under but not over', (t) => {
+test('--max-workers is the starting limit, which Settings can raise or lower', (t) => {
   const f = fixture(4); t.after(() => f.close());
   const m = f.open();
   assert.equal(m.limit, 4);
   f.hire(3);
   assert.equal(m.room(), 1);
-  assert.match(m.setLimit(6, 'Ada') ?? '', /--max-workers 4/);
-  assert.equal(m.limit, 4);
+  assert.equal(m.setLimit(6, 'Ada'), undefined);
+  assert.equal(m.limit, 6);
+  assert.equal(m.room(), 3);
   assert.equal(m.setLimit(2, 'Ada'), undefined);
   assert.equal(m.limit, 2);
   assert.equal(m.room(), -1);
@@ -55,6 +56,22 @@ test('--max-workers is a ceiling the office can go under but not over', (t) => {
   m.setLimit(undefined, 'Ada');
   assert.equal(m.limit, 4);
   assert.equal(m.state().ceiling, 4);
+});
+
+test('switching the limits off lifts them, keeps --max-workers, and persists', (t) => {
+  const f = fixture(2); t.after(() => f.close());
+  const m = f.open();
+  f.hire(2);
+  assert.ok(m.full());
+  m.setLimitsOff(true);
+  assert.equal(m.limit, undefined);
+  assert.equal(m.full(), undefined);
+  assert.equal(m.limitsOff(), true);
+  assert.equal(m.state().limitsOff, true);
+  assert.equal(f.open().limitsOff(), true);
+  m.setLimitsOff(false);
+  assert.equal(m.limit, 2);
+  assert.equal(f.open().limitsOff(), false);
 });
 
 test('everyone hears when the worker count moves, and only then', (t) => {

@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { MachineState } from '../shared/protocol.js';
+import { MAX_WORKER_LIMIT } from '../shared/machine.js';
 
 /** How often the CPU and memory are read. */
 const SAMPLE_MS = 5_000;
@@ -12,8 +13,7 @@ const HISTORY = 60;
 const MEM_PRESSURE = 90;
 const CPU_PRESSURE = 90;
 const CPU_WINDOW = 6;
-/** The highest worker limit there is: past this it isn't a limit. */
-export const MAX_WORKER_LIMIT = 500;
+export { MAX_WORKER_LIMIT };
 
 /** What hiring asks of the office's machine: whether it can take one more worker. */
 export interface Capacity {
@@ -68,7 +68,7 @@ function availableMemory(): Promise<number> {
  * The machine the office runs on: how busy its CPU and memory are (for the monitor on the wall, and
  * a warning before hiring while it's under pressure), and the most workers the office runs at once,
  * across every floor. That limit comes from --max-workers, or from ⚙️ Settings (kept in
- * .agent-office/machine.json), which can lower it but never raise it past --max-workers.
+ * .agent-office/machine.json), which overrides it either way (--max-workers is just the starting value).
  */
 export class Machine implements Capacity {
   private saved?: Saved;
@@ -111,9 +111,7 @@ export class Machine implements Capacity {
   /** The most workers the office takes, or undefined for no limit. */
   get limit(): number | undefined {
     if (this.off) return undefined;
-    const set = this.saved?.limit;
-    if (set === undefined) return this.ceiling;
-    return this.ceiling === undefined ? set : Math.min(set, this.ceiling);
+    return this.saved?.limit ?? this.ceiling;
   }
 
   limitsOff(): boolean {
@@ -157,9 +155,6 @@ export class Machine implements Capacity {
 
   /** Sets the limit from ⚙️ Settings (undefined takes it off). Returns why it can't, if it can't. */
   setLimit(limit: number | undefined, by: string): string | undefined {
-    if (limit !== undefined && this.ceiling !== undefined && limit > this.ceiling) {
-      return `The office was started with --max-workers ${this.ceiling}, so the limit can't go above ${this.ceiling}`;
-    }
     this.saved = limit === undefined ? undefined : { limit, by, at: Date.now() };
     this.persist();
     this.emit();

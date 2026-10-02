@@ -5,6 +5,7 @@ import type { ThemePick, WebhookKind } from '../../shared/protocol';
 import { THEME_PICKS } from '../../shared/theme';
 import { mapChoices } from '../../shared/maps';
 import { DOG_NAME_MAX, cleanDogName } from '../../shared/dog';
+import { MAX_WORKER_LIMIT } from '../../shared/machine';
 import { h, openModal, timeAgo } from './dom';
 import { agentFields, choiceLabel, officeChoice } from './provider';
 import { openPromptEditor, rewrittenPrompts } from './prompts';
@@ -403,7 +404,7 @@ export function buildSettings(net: Net, settings: Settings, onChange: (s: Settin
     limitRow.classList.toggle('hidden', !admin || off);
     limitsOffRow.classList.toggle('hidden', !admin);
     limitsOffBtn.textContent = off ? 'Turn limits back on' : 'Disable limits';
-    limitInput.placeholder = m.ceiling ? `1 to ${m.ceiling}` : 'e.g. 6';
+    limitInput.placeholder = `1 to ${MAX_WORKER_LIMIT}`;
     limitClear.textContent = m.ceiling ? `Back to ${m.ceiling}` : 'No limit';
     limitClear.classList.toggle('hidden', !m.set);
     const now = off
@@ -412,7 +413,7 @@ export function buildSettings(net: Net, settings: Settings, onChange: (s: Settin
         ? `No limit: the office hires a worker for every free seat. ${m.workers} ${m.workers === 1 ? 'is' : 'are'} here now, across every floor.`
         : `At most ${m.limit} worker${m.limit === 1 ? '' : 's'} at once, across every floor (${m.workers} now), shells and board agents too. Hiring past that is refused.`;
     const from = m.set ? ` Set by ${m.set.by} ${timeAgo(m.set.at)}.` : '';
-    const cap = m.ceiling ? ` The office was started with --max-workers ${m.ceiling}, so it can't go any higher.` : '';
+    const cap = m.ceiling ? ` It started at ${m.ceiling} (--max-workers).` : '';
     limitNote.textContent = now + from + cap + (admin ? '' : ' Admins can change it.');
   };
   paintLimit();

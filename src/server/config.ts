@@ -50,7 +50,7 @@ export interface Config {
   budget?: number;
   /** Refuse new hires for the rest of the day once the budget is spent. */
   budgetPause: boolean;
-  /** The most workers the office runs at once, across every floor; ⚙️ Settings can't go past it. */
+  /** The most workers the office runs at once, across every floor; ⚙️ Settings can change it (up or down) without a restart. */
   maxWorkers?: number;
   /** Slack / Discord webhook to post to when a worker needs input or finishes ('' turns it off). */
   webhook?: string;
@@ -136,8 +136,8 @@ Options:
                           day (env AGENT_OFFICE_BUDGET_PAUSE=1)
       --max-workers <n>   Run at most this many workers at once, across every
                           floor (env AGENT_OFFICE_MAX_WORKERS). Hiring past it
-                          is refused. Admins can lower the limit from ⚙️
-                          Settings, but not raise it past this
+                          is refused. Admins can change the limit
+                          from ⚙️ Settings, up or down, without restarting
       --webhook <url>     Post to this Slack or Discord webhook when a worker
                           needs input or finishes (env AGENT_OFFICE_WEBHOOK).
                           Also settable from ⚙️ Settings in the office; "" turns it off
