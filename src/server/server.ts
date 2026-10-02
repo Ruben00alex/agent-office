@@ -48,6 +48,7 @@ import { MAX_FLOORS } from '../shared/floors.js';
 import { lookFromSeed, sanitizeLook } from '../shared/avatar.js';
 import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree } from './maintenance.js';
 import { draftMaintenanceIssue, isIssueWriter } from './maintenance-issue-draft.js';
+import { IssueJobs } from './maintenance-issue-jobs.js';
 import { MaintenanceChatArchive } from './maintenance-chat.js';
 import { MaintenanceImages, MaintenanceWork, MAINTENANCE_IMAGE_MAX } from './maintenance-work.js';
 import { MaintenanceBoard } from './maintenance-board.js';
@@ -667,6 +668,26 @@ export async function startServer(cfg: Config) {
 
   const maintenanceHistory = new MaintenanceChatArchive(cfg.dataDir);
   const maintenanceImages = new MaintenanceImages(cfg.dataDir);
+  const issueAs = new Map<string, ReturnType<typeof signins.ghAs>>();
+  const issueJobs = new IssueJobs(async (job) => {
+    const repo = maintenanceBoard.state.repo;
+    if (!repo) throw new Error('No maintenance repository');
+    const as = issueAs.get(job.id);
+    if (typeof as === 'string') throw new Error(as);
+    const images = maintenanceImages.resolve(job.attachments);
+    // A retry after the issue exists (only queueing failed) must not create a duplicate.
+    let issue = job.issue as Awaited<ReturnType<typeof maintenanceBoard.create>> | undefined;
+    if (!issue) {
+      const draft = await draftMaintenanceIssue(job.title, job.body, { writer: isIssueWriter(job.writer) ? job.writer : 'auto' });
+      issue = await maintenanceBoard.create(draft.title, draft.body, as);
+      job.issue = issue;
+    }
+    if (job.queue) {
+      await maintenanceBoard.queue(issue.number, true, as);
+      maintenanceWork.queue(repo, issue, job.by, images);
+    }
+    return issue;
+  });
   const maintenanceWork = new MaintenanceWork(cfg.dataDir);
   let maintenanceStarting = false;
   const floorContext: FloorContext = {
@@ -1168,14 +1189,17 @@ export async function startServer(cfg: Config) {
           if (p === '/api/maintenance/issue') {
             const as = session.account ? signins.ghAs(session.account.id) : undefined;
             if (typeof as === 'string') throw new Error(as);
-            const images = maintenanceImages.resolve(body.attachments ?? []);
-            const draft = await draftMaintenanceIssue(str(body.title, 201), str(body.body, 20001), { writer: isIssueWriter(body.writer) ? body.writer : 'auto' });
-            const issue = await maintenanceBoard.create(draft.title, draft.body, as);
-            if (body.queue === true) {
-              await maintenanceBoard.queue(issue.number, true, as);
-              maintenanceWork.queue(repo, issue, by, images);
-            }
-            return send(res, 200, issue);
+            maintenanceImages.resolve(body.attachments ?? []);
+            const input = { title: str(body.title, 201), body: str(body.body, 20001), queue: body.queue === true, writer: isIssueWriter(body.writer) ? body.writer : 'auto', attachments: Array.isArray(body.attachments) ? body.attachments.map(String) : [] };
+            if (!input.title.trim() || input.title.length > 200 || input.body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
+            const job = issueJobs.start(input, by);
+            issueAs.set(job.id, as);
+            return send(res, 202, job);
+          }
+          if (typeof body.job === 'string') {
+            if (body.retry === true) { const job = issueJobs.retry(body.job); return send(res, 202, job); }
+            issueJobs.dismiss(body.job); issueAs.delete(body.job);
+            return send(res, 200, { ok: true });
           }
           const number = Number(body.number);
           if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Bad issue number');
@@ -1208,6 +1232,7 @@ export async function startServer(cfg: Config) {
       if (p.startsWith('/api/maintenance/') && req.method === 'GET') {
         try {
           if (p === '/api/maintenance/issue') return send(res, 200, await maintenanceBoard.issue(Number(url.searchParams.get('number')), session.account ? signins.githubLogin(session.account.id) : undefined));
+          if (p === '/api/maintenance/issue-jobs') return send(res, 200, { jobs: issueJobs.list() });
           if (p === '/api/maintenance/working') return send(res, 200, await stack.workingChanges());
           if (p === '/api/maintenance/change') return send(res, 200, await stack.review(url.searchParams.get('sha') ?? ''));
           if (p === '/api/maintenance/chat') {

@@ -77,8 +77,16 @@ console.log(JSON.stringify({title:'Improve captured idea',body:'## Scope\\nGroun
   assert.deepEqual(Buffer.from(await preview.arrayBuffer()), png);
   assert.equal((await fetch(`${base}/api/maintenance/image?id=../../etc/passwd`, { headers: { cookie } })).status, 400);
   const created = await fetch(`${base}/api/maintenance/issue`, { method: 'POST', headers, body: JSON.stringify({ title: 'Capture this idea', body: 'While Maintenance works', queue: true, attachments: [image.id] }) });
-  assert.equal(created.status, 200, JSON.stringify(await created.clone().json()));
-  assert.equal((await created.json()).number, 7);
+  assert.equal(created.status, 202, JSON.stringify(await created.clone().json()));
+  const job = await created.json();
+  assert.equal(job.status, 'drafting');
+  let done = job;
+  for (let i = 0; i < 100 && done.status === 'drafting'; i++) {
+    await new Promise(r => setTimeout(r, 50));
+    done = (await (await fetch(`${base}/api/maintenance/issue-jobs`, { headers: { cookie } })).json()).jobs.find((j: { id: string }) => j.id === job.id);
+  }
+  assert.equal(done.status, 'done', done.error);
+  assert.equal(done.issue.number, 7);
   const sent = JSON.parse(readFileSync(path.join(root, 'created.json'), 'utf8'));
   assert.ok(sent.args.includes('fork/agent-office'));
   assert.equal(sent.title, 'Improve captured idea');
