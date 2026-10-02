@@ -9,13 +9,16 @@ import { h, toast } from '../ui/dom';
 import { markdown } from '../ui/markdown';
 import { openPrompt, confirmDialog } from '../ui/prompt';
 import { providerPicker, workerChoice } from '../ui/provider';
+import { maintenanceTabs, type MaintenanceView } from '../ui/maintenance-tabs';
+import { maintenanceReview } from '../ui/maintenance-review';
+import { maintenanceConsole } from '../ui/maintenance-console';
 import { maintenanceContent } from '../ui/maintenance-chat';
 import { maintenanceJson } from '../ui/maintenance-board';
 import { imageComposer, imageEvidence } from '../ui/maintenance-images';
 import { openMaintenanceIssueCreate, workPanelParts } from '../ui/maintenance-work';
 import { renderDiff } from '../ui/changes';
 import { go, live, setSubtitle, type Screen } from './app';
-import { actions, button, empty, fill, heading, iconButton, layout, note, openSheet, page, row, searchBox, segmented, textarea } from './kit';
+import { actions, button, empty, fill, heading, iconButton, layout, note, openSheet, page, row, searchBox, textarea } from './kit';
 import { net, onServerMessage, openWorker } from './ctx';
 
 const on = store.on.bind(store);
@@ -136,7 +139,7 @@ function bubble(cfg: ChatConfig, m: MaintenanceChatMessage, prev?: MaintenanceCh
   );
 }
 
-type MaintenanceView = 'chat' | 'work' | 'review';
+
 let maintenanceView: MaintenanceView = 'chat';
 let carryDraft = '';
 
@@ -198,7 +201,23 @@ export function agentChatScreen([kind]: string[]): Screen {
   );
   const jump = h('button.lp-jump.hidden', { type: 'button', 'aria-label': 'Jump to the latest message', onclick: () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }) }, '↓');
   const frame = layout({ top: [tabs, conversationActions, workHead], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
-  const el = frame.el;
+  const consoleHost = h('div.maintenance-live-console');
+  const consoleRail = h('section.maintenance-console-rail.lite-maintenance-console', {}, h('h3', {}, 'Live agent console'), consoleHost);
+  const desktop = matchMedia('(min-width: 961px)');
+  let consoleView: ReturnType<typeof maintenanceConsole> | undefined;
+  let consoleWorker = '';
+  const updateConsole = () => {
+    const worker = maintenance && desktop.matches ? state?.worker : undefined;
+    if ((worker?.id ?? '') !== consoleWorker) {
+      consoleView?.dispose(); consoleView = undefined;
+      consoleWorker = worker?.id ?? '';
+      if (worker) consoleView = maintenanceConsole(consoleHost, worker, m => net.send(m));
+    }
+    if (worker) consoleView?.update(worker);
+    else consoleHost.replaceChildren(note('The live console appears when Maintenance starts.'));
+  };
+  if (maintenance) desktop.addEventListener('change', updateConsole);
+  const el = maintenance ? h('div.lite-maintenance-workspace', {}, frame.el, consoleRail) : frame.el;
   const scroller = frame.scroller;
   frame.top.classList.add('lp-top-slim');
   scroller.classList.add('lp-chatscroll');
@@ -282,16 +301,12 @@ export function agentChatScreen([kind]: string[]): Screen {
     if (maintenance) {
       fill(
         tabs,
-        segmented<MaintenanceView>(
-          [
-            { id: 'chat', label: '💬 Chat' },
-            { id: 'work', label: '📌 Work' },
-            { id: 'review', label: '🚀 Review', count: store.maintenance.changes.length },
-          ],
+        maintenanceTabs(
           view,
           (v) => {
             const wasChat = view === 'chat';
             view = maintenanceView = v;
+            reviewKey = '';
             paintFrame();
             paintView();
             // The conversation opens at its latest message; Work and Review open at their top.
@@ -299,6 +314,7 @@ export function agentChatScreen([kind]: string[]): Screen {
             if (v === 'chat') toBottom();
             else scroller.scrollTop = 0;
           },
+          store.maintenance.changes.length,
         ),
       );
     }
@@ -311,6 +327,7 @@ export function agentChatScreen([kind]: string[]): Screen {
   };
 
   function controls() {
+    updateConsole();
     const w = state?.worker;
     model.repaint();
     const archived = !newConversation && !!selected && selected !== w?.id;
@@ -378,42 +395,9 @@ export function agentChatScreen([kind]: string[]): Screen {
     const key = JSON.stringify([stack, state.worker?.status]);
     if (key === reviewKey) return;
     reviewKey = key;
-    void paintReview(stack);
+    void maintenanceReview(subview, stack, state.worker, m => net.send(m), sha => go(`agent/change/${sha}`));
   }
 
-  async function paintReview(stack = store.maintenance) {
-    const w = state?.worker;
-    const shipping = stack.phase === 'shipping';
-    const agentBusy = !!w && !['idle', 'done', 'exited'].includes(w.status);
-    const total = stack.changes.length + (stack.dirty ? 1 : 0);
-    const check = button('🧪 Run typecheck, tests & build', () => net.send({ t: 'maintenance.check' }));
-    check.disabled = stack.validation?.phase === 'running' || shipping || agentBusy;
-    const ship = button(shipping ? '⏳ Shipping…' : `🚀 Commit, push & rebuild${total > 1 ? ` (${total} changes)` : ''}`, () => confirmDialog('Ship the stack?', 'Runs the typecheck and tests, pushes, rebuilds and restarts the office once for everyone. Workers keep running through the restart.', 'Ship it', () => net.send({ t: 'maintenance.ship' })), 'primary');
-    ship.disabled = shipping || !!stack.unavailable || (!stack.changes.length && !stack.dirty);
-    const working = h('div', {}, h('p.lp-note', {}, 'Loading working edits…'));
-    fill(
-      subview,
-      note(`${stack.changes.length} stacked commit${stack.changes.length === 1 ? '' : 's'} · ${stack.dirty} edited file${stack.dirty === 1 ? '' : 's'} · ${stack.branch ?? 'maintenance/stack'}`),
-      stack.unavailable ? h('p.setting-note.bad', { role: 'alert' }, stack.unavailable) : null,
-      stack.validation ? h('p.lp-note', {}, stack.validation.phase === 'running' ? `⏳ Checking: ${stack.validation.step ?? 'Starting'}…` : `${stack.validation.phase === 'passed' ? '✅' : '❌'} Checks ${stack.validation.phase} · ${new Date(stack.validation.finishedAt ?? stack.validation.at).toLocaleString()}`) : null,
-      stack.validation?.error ? h('pre.maintenance-diff', {}, stack.validation.error) : null,
-      shipping ? h('p.laptop-wait', {}, h('span.spinner'), ` ${stack.step ?? 'Shipping'}…${stack.by ? ` (started by ${stack.by})` : ''}`) : null,
-      stack.phase === 'failed' && stack.error ? h('pre.upgrade-error', {}, stack.error) : null,
-      stack.note ? h('p.upgrade-status.ok', {}, stack.note) : null,
-      actions(check, ship),
-      heading('Stacked changes'),
-      ...(stack.changes.length ? [...stack.changes].reverse().map((c) => row({ icon: '🔹', title: c.subject, sub: c.sha, onclick: () => go(`agent/change/${c.sha}`) })) : [empty('🛠️', 'Nothing stacked', 'Ask Maintenance for something in Chat.')]),
-      heading('Uncommitted work'),
-      working,
-    );
-    try {
-      const r = await maintenanceJson<{ files: string; diff: string; truncated: boolean }>('/api/maintenance/working');
-      if (closed || !working.isConnected) return;
-      fill(working, h('pre.maintenance-working-files', {}, r.files || 'No uncommitted changes.'), r.diff ? h('details', {}, h('summary', {}, 'Tracked working diff'), h('pre.maintenance-diff', {}, r.diff)) : null, r.truncated ? h('p.lp-note', {}, 'Large changes: truncated. Ask Maintenance to explain the rest.') : null);
-    } catch (err) {
-      if (!closed && working.isConnected) fill(working, h('p.maintenance-chat-error', {}, (err as Error).message));
-    }
-  }
 
   function startIssue(item: MaintenanceWorkItem) {
     if (pending) return;
@@ -540,6 +524,8 @@ export function agentChatScreen([kind]: string[]): Screen {
     ],
     dispose: () => {
       saveDraft();
+      consoleView?.dispose();
+      desktop.removeEventListener('change', updateConsole);
       closed = true;
       generation++;
       clearInterval(poll);
@@ -556,7 +542,7 @@ export function changeScreen([sha]: string[]): Screen {
   const subject = store.maintenance.changes.find((c) => c.sha === sha)?.subject ?? sha;
   void maintenanceJson<{ diff: string; truncated: boolean }>(`/api/maintenance/change?sha=${encodeURIComponent(sha)}`)
     .then((r) =>
-      fill(body, renderDiff(r.diff, r.truncated), actions(button('✍️ Correct this change', () => ((carryDraft = `Please correct stacked change ${sha}: ${subject}`), go('agent/maintenance', true)), 'primary'))),
+      fill(body, renderDiff(r.diff, r.truncated), actions(button('✍️ Correct this change', () => ((carryDraft = `Please correct stacked change ${sha}: ${subject}`), (maintenanceView = 'chat'), go('agent/maintenance', true)), 'primary'))),
     )
     .catch((err) => fill(body, h('p.setting-note.bad', { role: 'alert' }, String(err))));
   return { title: subject, sub: sha, el: page(body) };

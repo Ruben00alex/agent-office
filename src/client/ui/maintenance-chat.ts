@@ -8,6 +8,8 @@ import { openStackChange, type MaintenanceActions } from './maintenance';
 import { confirmDialog } from './prompt';
 import { providerPicker, workerChoice } from './provider';
 import { imageComposer, imageEvidence } from './maintenance-images';
+import { maintenanceTabs } from './maintenance-tabs';
+import { maintenanceReview } from './maintenance-review';
 import { maintenanceConsole } from './maintenance-console';
 import { openMaintenanceIssueCreate, workPanel } from './maintenance-work';
 
@@ -110,7 +112,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
   const stackPanel = h('div.maintenance-rail-stack');
   const consoleRail = h('section.maintenance-console-rail', {}, h('h3', {}, 'Agent control'), activity, attention, consoleDetails, stackPanel);
   const tabs = h('nav.maintenance-tabs', { 'aria-label': 'Maintenance workspace views' });
-  for (const [value, label] of [['conversation', 'Conversation'], ['work', 'Work & issues'], ['review', 'Review & checks']] as const) tabs.append(h('button', { type: 'button', 'data-tab': value, onclick: () => selectTab(value) }, label));
+
 
   const submit = h('button.maintenance-send', { type: 'submit' }, 'Send');
   const older = h('button.maintenance-older.hidden', { type: 'button' }, 'Load earlier messages');
@@ -131,7 +133,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
   const el = h('div.modal.maintenance-chat', { role: 'dialog', 'aria-label': 'Maintenance engineering workspace' },
     h('header', {}, h('div', {}, h('span.maintenance-experiment', {}, 'AGENT OFFICE · ENGINEERING'), h('h2', {}, 'Maintenance'), status),
       conversationTitle,
-      h('div.maintenance-chat-tools', {}, h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, 'Review stack'), retitle, terminal, end, close)),
+      h('div.maintenance-chat-tools', {}, h('button', { type: 'button', onclick: () => selectTab('review') }, 'Review stack'), retitle, terminal, end, close)),
     h('div.maintenance-chat-layout', {},
       h('aside', {}, capture, create, current, h('h3', {}, 'Conversation archive'), h('small', {}, 'Shared with the office · saved across restarts'), search, archive),
       h('section.maintenance-chat-main', {}, tabs, older, list, work, review, model.element, form), consoleRail));
@@ -180,7 +182,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     form.classList.toggle('hidden', tab !== 'conversation');
     work.classList.toggle('hidden', tab !== 'work');
     review.classList.toggle('hidden', tab !== 'review');
-    for (const button of tabs.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.tab === value));
+    tabs.replaceChildren(maintenanceTabs(value === 'conversation' ? 'chat' : value, view => selectTab(view === 'chat' ? 'conversation' : view), (state?.stack ?? store.maintenance).changes.length));
     older.classList.toggle('hidden', tab !== 'conversation' || !state?.conversation?.hasOlder);
     if (tab === 'review') void drawReview();
     if (tab === 'work') drawWork();
@@ -218,24 +220,12 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     const key = JSON.stringify([stack, state.worker?.status]);
     if (key === reviewKey) return;
     reviewKey = key;
-    const changes = h('div.maintenance-review-commits');
-    const working = h('div', {}, h('p', {}, 'Loading working edits…'));
-    review.replaceChildren(h('div.maintenance-section-heading', {}, h('h3', {}, 'Review the repository'), h('button', { type: 'button', onclick: () => { reviewKey = ''; void drawReview(); } }, 'Refresh diff')),
-      h('p', {}, `${stack.changes.length} stacked commits · ${stack.dirty} edited files · ${stack.branch ?? 'maintenance/stack'}`),
-      h('button', { type: 'button', disabled: stack.validation?.phase === 'running' || stack.phase === 'shipping' || !!state.worker && !['idle', 'done', 'exited'].includes(state.worker.status), onclick: () => send({ t: 'maintenance.check' }) }, 'Run typecheck, tests & build'),
-      ...(stack.validation ? [h('p.maintenance-review-status', {}, stack.validation.phase === 'running' ? `Checking: ${stack.validation.step ?? 'Starting'}…` : `${stack.validation.phase === 'passed' ? '✓' : '✕'} Checks ${stack.validation.phase} · ${new Date(stack.validation.finishedAt ?? stack.validation.at).toLocaleString()}${stack.validation.sha ? ` · HEAD ${stack.validation.sha}` : ''}`), ...(stack.validation.error ? [h('pre.maintenance-diff', {}, stack.validation.error)] : []), h('p.maintenance-muted', {}, 'Results describe this run. Further edits require another check; shipping checks the whole stack again.')] : []),
-      h('p.maintenance-review-status', {}, stack.phase === 'shipping' ? `Checks / shipping: ${stack.step ?? 'Starting'}` : stack.phase === 'failed' ? `Checks / shipping failed: ${stack.error ?? 'Review the stack'}` : 'Agent check output appears in the live console. Shipping reruns typecheck, tests and build for the whole stack.'),
-      h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, 'Review stack & shipping controls'), changes,
-      h('h4', {}, 'Uncommitted work'), h('p.maintenance-muted', {}, 'Includes tracked diffs and a list of new files. New-file contents are available to the agent in its worktree.'), working);
-    for (const commit of [...stack.changes].reverse()) changes.append(h('button.maintenance-review-commit', { type: 'button', onclick: () => openStackChange(commit, reviewActions) }, h('code', {}, commit.sha), ` ${commit.subject}`, h('span', {}, 'Read diff / request correction →')));
-    try {
-      const result = await maintenanceJson<{ files: string; diff: string; truncated: boolean }>('/api/maintenance/working');
-      if (closed || !working.isConnected) return;
-      working.replaceChildren(h('pre.maintenance-working-files', {}, result.files || 'No uncommitted changes.'),
-        ...(result.diff ? [h('details', {}, h('summary', {}, 'Tracked working diff'), h('pre.maintenance-diff', {}, result.diff))] : []),
-        ...(result.truncated ? [h('p', {}, 'Large changes: this preview is truncated. Ask the agent to explain the rest.')] : []));
-    } catch (err) { if (!closed && working.isConnected) working.replaceChildren(h('p.maintenance-chat-error', {}, (err as Error).message)); }
+    await maintenanceReview(review, stack, state.worker, send, sha => {
+      const commit = stack.changes.find(c => c.sha === sha);
+      if (commit) openStackChange(commit, reviewActions);
+    });
   }
+
   /** Read-only stack summary under the console: recent commits, the last check and the session's tokens. */
   function drawStackPanel() {
     const stack = state?.stack ?? store.maintenance;
@@ -251,7 +241,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
       ...(recent.length ? recent.map(c => h('button.maintenance-rail-commit', { type: 'button', title: c.subject, onclick: () => openStackChange(c, reviewActions) }, h('code', {}, c.sha.slice(0, 7)), ` ${c.subject}`))
         : [h('p.maintenance-muted', {}, 'No stacked changes. Maintenance will create them.')]),
       checks,
-      h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, stack.changes.length > 3 ? `Review all ${stack.changes.length} & ship` : stack.changes.length || stack.dirty ? 'Review stack & ship' : 'Review stack'),
+      h('button', { type: 'button', onclick: () => selectTab('review') }, stack.changes.length > 3 ? `Review all ${stack.changes.length} & ship` : stack.changes.length || stack.dirty ? 'Review stack & ship' : 'Review stack'),
       ...(worker && usage ? [h('p.maintenance-rail-tokens', {}, `${fmtTokens(usage)} tokens this session`)] : []));
   }
   function updateControls() {

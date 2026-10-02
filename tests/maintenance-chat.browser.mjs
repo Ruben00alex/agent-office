@@ -117,6 +117,29 @@ await page.screenshot({path:'/tmp/maintenance-chat-new-draft.png',animations:'di
 await page.getByRole('button',{name:'Current conversation',exact:true}).click();
 await page.waitForSelector('[data-message="room1"]');
 await page.keyboard.press('Escape');
+// Shared desktop tabs preserve draft/history and keep console visible, including at 961px.
+worker={...worker,status:'done'};
+await page.route('**/api/maintenance/working', r=>r.fulfill({contentType:'application/json',body:JSON.stringify({files:'',diff:'',truncated:false})}));
+await page.evaluate(()=>openChat());
+await page.waitForSelector('[data-message="room1"]');
+await input.fill('Keep this draft across tabs');
+for (const name of ['📌 Work', '🚀 Review', '💬 Chat']) {
+ await page.getByRole('tab',{name,exact:true}).click();
+ if(!await page.locator('.maintenance-console-host').isVisible())throw Error('console hidden in '+name);
+}
+if(await input.inputValue()!=='Keep this draft across tabs')throw Error('tab switch lost draft');
+await page.getByRole('tab',{name:'🚀 Review',exact:true}).click();
+await page.getByRole('button',{name:'🚀 Commit, push & rebuild',exact:true}).waitFor();
+await page.setViewportSize({width:961,height:980});
+const bounds=await page.evaluate(()=>{
+ const main=document.querySelector('.maintenance-chat-main').getBoundingClientRect();
+ const console=document.querySelector('.maintenance-console-rail').getBoundingClientRect();
+ return {mainRight:main.right,consoleLeft:console.left,mainTop:main.top,consoleTop:console.top};
+});
+if(bounds.consoleLeft<bounds.mainRight-1||Math.abs(bounds.mainTop-bounds.consoleTop)>1)throw Error('console not alongside at 961px');
+await page.screenshot({path:'/tmp/maintenance-36-desktop.png',animations:'disabled'});
+await page.keyboard.press('Escape');
+await page.setViewportSize({width:1360,height:980});
 // Workspace defaults and one-time promotion preserve later explicit legacy choices.
 await page.evaluate(async()=>{
  const state=await import('/state.ts');localStorage.removeItem('agent-office.settings');

@@ -1571,3 +1571,25 @@ a.when:hover { text-decoration: underline; }
 .term-navigation span { overflow-wrap: anywhere; }
 
 .maintenance-note .done-flag { display: block; margin-top: 4px; font-weight: 700; color: #1b6e3a; }
+
+/* Shared Maintenance navigation and review, with the office visible around the kiosk. */
+.maintenance-tabs .lp-seg { display: flex; width: 100%; gap: 6px; }
+.maintenance-tabs .lp-seg button { flex: 1; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.maintenance-tabs .lp-seg button.on { background: #e8edf9; color: #3b5293; border-color: #b9c6e8; }
+.maintenance-tabs .n { padding: 0 6px; border-radius: 999px; background: #3b5293; color: white; }
+.maintenance-review-view .lp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.maintenance-review-view .lp-h { font-size: 15px; margin: 18px 0 8px; }
+.maintenance-review-view .lp-row { display: flex; align-items: center; gap: 10px; width: 100%; margin: 6px 0; text-align: left; }
+.maintenance-review-view .lp-row .txt { flex: 1; min-width: 0; }
+.maintenance-review-view .lp-row b, .maintenance-review-view .lp-row small { display: block; overflow-wrap: anywhere; }
+.maintenance-review-view .lp-note { color: #5b6573; font-size: 13px; }
+@media (min-width: 961px) {
+  .maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: 160px minmax(280px, 1fr) minmax(300px, .85fr); overflow: hidden; }
+  .maintenance-chat:not(.product-chat) .maintenance-console-rail { grid-column: auto; min-height: 0; border-left: 1px solid #e7eaf0; border-top: 0; overflow: hidden; }
+  .maintenance-chat:not(.product-chat) .maintenance-chat-main { min-height: 0; }
+  .maintenance-chat:not(.product-chat) .maintenance-console, .maintenance-chat:not(.product-chat) .maintenance-live-console { flex: 1 1 0; min-height: 0; }
+  .maintenance-chat:not(.product-chat) .maintenance-console-host { flex: 1 1 0; height: auto; min-height: 90px; }
+}
+@media (min-width: 961px) {
+  .maintenance-chat:not(.product-chat) .maintenance-console::details-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+}

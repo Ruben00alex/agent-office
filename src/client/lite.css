@@ -52,7 +52,7 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 .lite-actions:empty { display: none; }
 
 .lite-main { flex: 1; min-height: 0; width: 100%; max-width: 760px; margin: 0 auto; padding: 12px var(--gutter) 16px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-.lite-main:has(> .lp-fill) { overflow: hidden; padding-bottom: 0; display: flex; flex-direction: column; }
+.lite-main:has(> .lp-fill, > .lite-maintenance-workspace) { overflow: hidden; padding-bottom: 0; display: flex; flex-direction: column; }
 
 .lite-nav { flex: none; position: relative; z-index: 20; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); background: #fff; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
 .lite-tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 59px; padding: 4px 2px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
@@ -274,7 +274,7 @@ body.lite { height: 100dvh; display: flex; flex-direction: column; background: v
 
 /* A page inside a tab is a screen of its own: no tab bar, so it has all the room (← goes back). */
 body[data-root="0"] .lite-nav { display: none; }
-body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-inset-bottom); }
+body[data-root="0"] .lite-main:has(> .lp-fill, > .lite-maintenance-workspace) { padding-bottom: env(safe-area-inset-bottom); }
 .lp-icon { width: 40px; height: 40px; min-width: 40px; padding: 0; border-radius: 10px; justify-content: center; font-size: 17px; line-height: 1; }
 :where(body.lite) .lp-icon { border-color: transparent; background: transparent; }
 :where(body.lite) .lp-icon:hover { background: var(--paper-2); }
@@ -346,7 +346,7 @@ body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-i
   .lite-brand b { font-weight: 650; letter-spacing: -.01em; }
   .lite-bar { grid-area: bar; padding: 8px var(--gutter); }
   .lite-main { grid-area: main; max-width: none; padding: 20px var(--gutter) 28px; }
-  .lite-main:has(> .lp-fill) { padding-bottom: 20px; }
+  .lite-main:has(> .lp-fill, > .lite-maintenance-workspace) { padding-bottom: 20px; }
   body.lite[data-root] .lite-nav { grid-area: nav; display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; background: var(--paper); border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
   .lite-tab { flex-direction: row; justify-content: flex-start; gap: 10px; min-height: 40px; padding: 6px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #3a4558; }
   .lite-tab .ico { width: 24px; height: 24px; border-radius: 0; background: none; font-size: 17px; }
@@ -395,4 +395,14 @@ body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-i
   .sheet.tall { height: min(720px, 86dvh); }
   .sheet-grab { visibility: hidden; height: 0; margin-top: 4px; }
   #toasts, .conn { top: 72px; }
+}
+
+.lite-maintenance-workspace { display: contents; }
+.lite-maintenance-console { display: none; }
+@media (min-width: 961px) {
+  .lite-maintenance-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .8fr); height: 100%; min-height: 0; }
+  .lite-maintenance-workspace > .lp-fill { min-width: 0; }
+  .lite-maintenance-console { display: flex; grid-column: auto; min-height: 0; overflow: hidden; border-left: 1px solid var(--line); border-top: 0; }
+  .lite-maintenance-console .maintenance-live-console { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+  .lite-maintenance-console .maintenance-console-host { flex: 1 1 0; height: auto; min-height: 90px; }
 }
