@@ -709,6 +709,11 @@ export async function startServer(cfg: Config) {
     hook: { url: `http://127.0.0.1:${hookPort}`, token: '' },
     ledger,
     capacity: machine,
+    providerDepleted: (provider) => {
+      const state = provider === 'claude' ? limits.state : provider === 'codex' ? codexLimits.state : undefined;
+      const full = state?.windows.find((w) => w.pct >= 100 && (w.resetsAt === undefined || w.resetsAt > Date.now()));
+      return full ? `${full.label} is 100% used` : undefined;
+    },
     prompts,
     emit: toFloor,
     toast: toastFloor,

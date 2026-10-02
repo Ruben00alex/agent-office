@@ -10,6 +10,7 @@ function fixture(defaultProvider: AgentProvider = 'claude') {
   const dir = mkdtempSync(path.join(tmpdir(), 'office-queue-'));
   const workers: WorkerInfo[] = [];
   let hired = 0;
+  const depleted = new Set<AgentProvider>();
   const manager: QueueWorkers = {
     defaultProvider,
     list: () => workers,
@@ -37,12 +38,12 @@ function fixture(defaultProvider: AgentProvider = 'claude') {
   const open = (room?: () => number, worktrees = false) => {
     const queue = new TaskQueue(dir, manager, worktrees, {
       update() {}, toast() {}, claimIssue: async () => undefined,
-      refreshGitHub() {}, hiringPaused: () => undefined, emptied: () => emptied++, room,
+      refreshGitHub() {}, hiringPaused: () => undefined, providerDepleted: (p) => depleted.has(p) ? 'used up' : undefined, emptied: () => emptied++, room,
     });
     queues.push(queue);
     return queue;
   };
-  return { dir, workers, open, emptied: () => emptied, close() { queues.forEach((q) => q.shutdown()); rmSync(dir, { recursive: true, force: true }); } };
+  return { dir, workers, depleted, open, emptied: () => emptied, close() { queues.forEach((q) => q.shutdown()); rmSync(dir, { recursive: true, force: true }); } };
 }
 
 test('queue seats the selected provider and preserves it through completion and retry', (t) => {
@@ -418,4 +419,19 @@ test('a manually hired finished worker frees office capacity for queued work in 
   assert.equal(f.workers[0].model, 'sonnet');
   assert.equal(f.workers[0].effort, 'high');
   assert.deepEqual(next.state().tasks.map((t) => t.status), ['running', 'queued']);
+});
+
+test('a task whose provider is out of usage is seated on one that still has some, or waits', (t) => {
+  const f = fixture('codex'); t.after(() => f.close());
+  const q = f.open();
+  f.depleted.add('codex');
+  q.add('Fix login', 'Tester');
+  assert.equal(f.workers[0].provider, 'claude');
+  assert.equal(q.state().tasks[0].provider, 'claude');
+  f.depleted.add('claude');
+  q.add('Second', 'Tester');
+  assert.equal(f.workers.length, 1);
+  assert.equal(q.state().tasks[1].status, 'queued');
+  f.depleted.delete('codex'); q.pump();
+  assert.equal(f.workers[1].provider, 'codex');
 });

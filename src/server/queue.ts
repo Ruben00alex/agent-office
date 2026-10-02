@@ -31,6 +31,8 @@ export interface QueueEvents {
   refreshGitHub(): void;
   /** Why no workers may be hired right now (today's budget is spent), if that's so. */
   hiringPaused(): string | undefined;
+  /** Why a provider can't take a new worker (its plan window is used up until it resets), when it can't. Undefined when it has room or isn't metered. */
+  providerDepleted?(provider: AgentProvider): string | undefined;
   /** How many more workers the office has room for under its worker limit (Infinity without one). */
   room?(): number;
   /** The worker limits are switched off in ⚙️ Settings: the queue's own limit doesn't hold it either. */
@@ -40,6 +42,9 @@ export interface QueueEvents {
   /** What's added after a task that runs in its own worktree ('queue.worktree' in shared/prompts.ts); empty for nothing. */
   worktreeNote?(): string;
 }
+
+/** Where a task goes when its provider's plan is used up: the first of these with room. Only metered providers qualify. */
+export const FALLBACK_PROVIDERS: readonly AgentProvider[] = ['claude', 'codex'];
 
 export const DEFAULT_MAX_WORKERS = 3;
 const MAX_TASKS = 100;
@@ -333,10 +338,26 @@ export class TaskQueue {
         void fetching.then(() => this.pump());
         break;
       }
+      // The provider is checked now, not when the task was queued: one whose plan is used up hands the task to another that still has room.
+      const wanted = t.provider ?? this.workers.defaultProvider;
+      const why = this.events.providerDepleted?.(wanted);
+      let provider = wanted;
+      let model = t.model;
+      let effort = t.effort;
+      if (why) {
+        const other = FALLBACK_PROVIDERS.find((p) => p !== wanted && !this.events.providerDepleted?.(p));
+        if (!other) {
+          if (FALLBACK_PROVIDERS.includes(wanted)) break; // everything metered is spent: wait for a reset
+        } else {
+          provider = other;
+          model = undefined;
+          effort = undefined;
+        }
+      }
       const desk = free ?? this.recycleDesk();
       if (!desk) break;
       const note = this.useWorktree ? this.events.worktreeNote?.() ?? PROMPTS['queue.worktree'].text : '';
-      const r = this.workers.spawn(desk, `${t.addedBy} (queue)`, note ? `${t.prompt}\n\n${note}` : t.prompt, this.useWorktree, 'agent', t.provider ?? this.workers.defaultProvider, t.model, t.effort, undefined, t.owner);
+      const r = this.workers.spawn(desk, `${t.addedBy} (queue)`, note ? `${t.prompt}\n\n${note}` : t.prompt, this.useWorktree, 'agent', provider, model, effort, undefined, t.owner);
       changed = true;
       if (typeof r === 'string') {
         t.status = 'done';
@@ -345,6 +366,12 @@ export class TaskQueue {
         t.finishedAt = Date.now();
         this.events.toast(`📋 Couldn't start ${label(t)}: ${r}`, 'error');
         continue;
+      }
+      if (provider !== wanted) {
+        t.provider = provider;
+        t.model = model;
+        t.effort = effort;
+        this.events.toast(`📋 ${wanted} is out of usage (${why}): ${label(t)} goes to ${provider} instead`, 'warn');
       }
       t.status = 'running';
       t.workerId = r.id;

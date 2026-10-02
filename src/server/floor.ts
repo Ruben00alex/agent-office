@@ -3,7 +3,7 @@ import { PresentationArchive } from './presentations.js';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import type { ChangesState, FloorInfo, PeerInfo, ProjectInfo, ServerMsg, WorkerInfo } from '../shared/protocol.js';
+import type { AgentProvider, ChangesState, FloorInfo, PeerInfo, ProjectInfo, ServerMsg, WorkerInfo } from '../shared/protocol.js';
 import { isBusy } from '../shared/status.js';
 import { DESK_BY_ID } from '../shared/layout.js';
 import type { FloorDef } from './building.js';
@@ -41,6 +41,8 @@ export interface FloorContext {
   hook: HookEnv;
   /** Spend, across every floor. */
   ledger: Ledger;
+  /** Why a provider can't take a new worker (its plan window is used up), when it can't. */
+  providerDepleted(provider: AgentProvider): string | undefined;
   /** The office's worker limit, across every floor. */
   capacity: Capacity;
   /** The office's prompts and the worker everyone starts on, as set in ⚙️ Settings. */
@@ -248,6 +250,7 @@ export class Floor {
       },
       refreshGitHub: () => void this.github.refresh(),
       hiringPaused: () => ctx.ledger.hiringPaused,
+      providerDepleted: (p) => ctx.providerDepleted(p),
       room: () => ctx.capacity.room(),
       limitsOff: () => ctx.capacity.limitsOff?.() ?? false,
       emptied: () => {
