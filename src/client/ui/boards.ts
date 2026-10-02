@@ -133,6 +133,11 @@ function queueChip(issue: number): Node | '' {
   return t.pr ? h('span.qchip.done', {}, `🔀 PR #${t.pr.number} · ${provider}`) : '';
 }
 
+/** Flags an open issue that a merged PR or shipped commit already addressed. Close it, or check before handing it to a worker. */
+export function doneChip(it: Pick<GhIssue, 'state' | 'doneBy'>): Node | '' {
+  return it.state === 'OPEN' && it.doneBy ? h('span.qchip.done', { title: `${it.doneBy}, but GitHub still has the issue open. Close it if the work is done.` }, `✅ ${it.doneBy}, still open`) : '';
+}
+
 function card(n: number, title: string, meta: (Node | string)[], i: number, onclick: () => void, onLabels: () => void, onClose?: () => void) {
   return h(
     'li.card',
@@ -283,7 +288,7 @@ export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActi
       for (const col of issueColumns(store.issues.items)) {
         body.append(
           column(col, all, (it, i) =>
-            card(it.number, it.title, [...labelChips(it.labels), queueChip(it.number), it.assignees.length ? `👤 ${it.assignees.join(', ')}` : `by ${it.author}`, it.comments ? `💬 ${it.comments}` : '', timeAgo(it.updatedAt)], i, () => openIssue(it, net, actions), () => openLabels('issue', it, net), it.state === 'OPEN' ? () => openClose('issue', it, net, () => net.send({ t: 'gh.refresh' })) : undefined),
+            card(it.number, it.title, [...labelChips(it.labels), doneChip(it), queueChip(it.number), it.assignees.length ? `👤 ${it.assignees.join(', ')}` : `by ${it.author}`, it.comments ? `💬 ${it.comments}` : '', timeAgo(it.updatedAt)], i, () => openIssue(it, net, actions), () => openLabels('issue', it, net), it.state === 'OPEN' ? () => openClose('issue', it, net, () => net.send({ t: 'gh.refresh' })) : undefined),
           ),
         );
       }

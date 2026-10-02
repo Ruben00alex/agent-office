@@ -892,7 +892,7 @@ export async function startServer(cfg: Config) {
   const maintenanceBoard = new MaintenanceBoard((state) => {
     if (state.repo && !state.loading && !state.error) maintenanceWork.syncIssues(state.repo, state.items);
     broadcast({ t: 'maintenance.issues', state });
-  });
+  }, undefined, () => maintenanceWork.list(maintenanceBoard.state.repo).flatMap((w) => w.commits.map((c) => ({ number: w.number, sha: c.sha }))));
   maintenanceBoard.start();
 
   // --- HTTP ------------------------------------------------------------------------------------

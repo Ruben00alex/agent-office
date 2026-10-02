@@ -399,6 +399,8 @@ export interface GhIssue {
   updatedAt: string;
   body: string;
   comments: number;
+  /** Set on an open issue that looks finished already: the merged PR or shipped commit that addressed it, e.g. "PR #12 merged". */
+  doneBy?: string;
 }
 
 export interface GhPull {

@@ -1155,13 +1155,15 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
   // pulls focus out of the provider picker.
   const closeIssue = h('button.btn', { type: 'button', title: 'Close this issue on GitHub', onclick: () => openClose('issue', it, net, load) }, '✔️ Close issue…');
   const queueProvider = providerPicker(store.project, `issue-provider-${it.number}`, 'Queue on');
+  /** Asks first when the issue looks finished already, so nobody carries a done card to a worker. */
+  const stillWanted = () => !(it.state === 'OPEN' && it.doneBy) || confirm(`#${it.number} looks already done (${it.doneBy}) but is still open on GitHub. Hand it to a worker anyway?\n\nCancel, then use “Close issue…” if the work is done.`);
   const addIssueToQueue = () => {
-    if (!queueProvider.valid()) return;
+    if (!queueProvider.valid() || !stillWanted()) return;
     modal.close();
     actions.queue(issuePrompt(it), `#${it.number} ${it.title}`, it.number, queueProvider.value(), queueProvider.model(), queueProvider.effort());
   };
   const queue = h('button.btn', { type: 'button', onclick: addIssueToQueue }) as HTMLButtonElement;
-  const carry = actions.pickUp;
+  const carry = actions.pickUp && ((card: GhIssue) => stillWanted() && actions.pickUp?.(card));
   const pickUp = carry ? h('button.btn', { type: 'button', title: 'Carry its card to an empty desk, a worker or the queue board, and press E there', onclick: () => carry(it) }, '✋ Pick it up') : null;
   const meta = h('div.gh-meta');
   const el = h(
@@ -1180,7 +1182,7 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
       queueProvider.element,
       queue,
       pickUp,
-      h('button.btn.primary', { type: 'button', onclick: () => actions.assign(issuePrompt(it), `Hand issue #${it.number} to a worker`) }, '🤖 Hand to a worker'),
+      h('button.btn.primary', { type: 'button', onclick: () => stillWanted() && actions.assign(issuePrompt(it), `Hand issue #${it.number} to a worker`) }, '🤖 Hand to a worker'),
     ),
   );
   const renderFrame = () => {
@@ -1191,6 +1193,7 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
         h('b', {}, it.author),
         h('span', {}, `opened this ${timeAgo(it.createdAt)}`),
         it.assignees.length ? h('span', {}, `· 👤 ${it.assignees.join(', ')}`) : null,
+        it.state === 'OPEN' && it.doneBy ? h('span.qchip.done', { title: 'GitHub still has this issue open. Close it if the work is done.' }, `✅ ${it.doneBy}, still open`) : null,
         ...it.labels.map(labelChip),
         labelButton('issue', () => it, net, (labels) => ((it = { ...it, labels }), renderFrame())),
       ),

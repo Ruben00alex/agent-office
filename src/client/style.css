@@ -1556,3 +1556,5 @@ a.when:hover { text-decoration: underline; }
 
 .term-navigation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 8px 12px; background: var(--paper); color: var(--ink); border-top: 2px solid var(--ink); font-size: 12px; }
 .term-navigation span { overflow-wrap: anywhere; }
+
+.maintenance-note .done-flag { display: block; margin-top: 4px; font-weight: 700; color: #1b6e3a; }

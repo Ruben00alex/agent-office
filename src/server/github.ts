@@ -3,6 +3,11 @@ import type { GhCheck, GhCloseReason, GhComment, GhIssue, GhIssueDetail, GhLabel
 import type { GhAs } from './signins.js';
 
 const REFRESH_MS = 90_000;
+
+/** Whether some text says it closes, fixes, resolves or implements issue `n`. */
+export function referencesIssue(text: string, n: number): boolean {
+  return new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|implement(?:s|ed)?|address(?:es|ed)?)\\s*:?\\s+(?:[\\w.-]+/[\\w.-]+)?#${n}\\b`, 'i').test(text);
+}
 /** How long the repo's list of labels is kept before the label picker asks GitHub again. */
 const LABELS_MS = 60_000;
 
@@ -408,7 +413,7 @@ export class GitHub {
         body: String(i.body ?? '').slice(0, 4000),
         comments: Array.isArray(i.comments) ? i.comments.length : Number(i.comments ?? 0),
       }));
-      const items = this.relabel('issue', fetched, asked);
+      const items = this.markDone(this.relabel('issue', fetched, asked));
       this.issues = { items, fetchedAt: Date.now(), loading: false };
     } catch (err) {
       this.issues = { ...this.issues, loading: false, error: (err as Error).message, fetchedAt: Date.now() };
@@ -453,9 +458,30 @@ export class GitHub {
       }));
       const items = this.relabel('pull', fetched, asked);
       this.pulls = { items, fetchedAt: Date.now(), loading: false };
+      // A newly merged PR can show that an issue is already done.
+      const marked = this.markDone(this.issues.items);
+      if (marked.some((i, n) => i.doneBy !== this.issues.items[n].doneBy)) {
+        this.issues = { ...this.issues, items: marked };
+        this.onIssues(this.issues);
+      }
     } catch (err) {
       this.pulls = { ...this.pulls, loading: false, error: (err as Error).message, fetchedAt: Date.now() };
     }
     this.onPulls(this.pulls);
+  }
+
+  /**
+   * Flags open issues a merged PR already addressed (it closes them, or says "fixes #n" and the like).
+   * GitHub only closes the ones merged into the default branch with a keyword, so others stay open and
+   * get handed to a worker who finds the work done.
+   */
+  private markDone(items: GhIssue[]): GhIssue[] {
+    const merged = this.pulls.items.filter((p) => p.state === 'MERGED');
+    return items.map((i) => {
+      if (i.state !== 'OPEN') return i.doneBy ? { ...i, doneBy: undefined } : i;
+      const pr = merged.find((p) => p.closes.includes(i.number) || referencesIssue(`${p.title}\n${p.body}`, i.number));
+      const doneBy = pr ? `PR #${pr.number} merged` : undefined;
+      return doneBy === i.doneBy ? i : { ...i, doneBy };
+    });
   }
 }
