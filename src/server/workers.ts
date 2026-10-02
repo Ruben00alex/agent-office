@@ -7,7 +7,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { MaintenanceTranscriptReader } from './maintenance-chat.js';
 import type { MaintenanceChatMessage } from '../shared/protocol.js';
-import { CodexUsageReader, codexLimitHit } from './codex-usage.js';
+import { CodexUsageReader } from './codex-usage.js';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
 import type { AgentChoice, AgentEffort, AgentProvider, Run, TerminalHit, WorkerInfo, WorkerKind, WorkerRepo, WorkerStatus, WorkerTask } from '../shared/protocol.js';
@@ -198,10 +198,6 @@ interface Worker {
   interrupted?: boolean;
   /** Muse resume cannot take a prompt on argv; paste this into the TUI after SessionStart. */
   pendingPrompt?: string;
-  /** The last of a Codex worker's output, to spot its usage-limit message across chunks. */
-  limitTail?: string;
-  /** The reset time of the usage-limit message already reported. */
-  limitHit?: number;
   /** Output since its scrollback was last saved to disk. */
   unsaved?: boolean;
   /** Where this run's own output starts, below the scrollback carried over from before. */
@@ -218,8 +214,6 @@ export interface WorkerEvents {
   data(workerId: string, data: string, viewers: string[]): void;
   screen(workerId: string, frame: { cols: number; rows: number; lines: Record<number, Run[]>; full: boolean; cursor: [number, number] }): void;
   toast(text: string, level: 'info' | 'warn' | 'error'): void;
-  /** A Codex worker's terminal says the account's usage limit is hit, until `resetsAt`. */
-  codexLimitHit?(resetsAt: number): void;
 }
 
 /** The two station agents whose conversation the office shows as a chat (see server/maintenance-chat.ts). */
@@ -2038,14 +2032,6 @@ export class WorkerManager {
       w.screenDirty = true;
       w.unsaved = true;
       if (w.viewers.size) this.events.data(info.id, data, [...w.viewers.keys()]);
-      if (isCodex) {
-        w.limitTail = ((w.limitTail ?? '') + data).slice(-600);
-        const resetsAt = codexLimitHit(w.limitTail);
-        if (resetsAt !== null && resetsAt !== w.limitHit) {
-          w.limitHit = resetsAt;
-          this.events.codexLimitHit?.(resetsAt);
-        }
-      }
     });
     proc.onExit(({ exitCode, error, lost }) => {
       if (w.pty !== proc || this.workers.get(info.id) !== w) return;
