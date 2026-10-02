@@ -76,9 +76,9 @@ export function openPrompt(opts: PromptOptions) {
   const roleRow = opts.roleOption
     ? h(
         'label',
-        { for: 'role-toggle', style: 'display:flex;gap:8px;align-items:center;margin:10px 0 0;font-weight:700;cursor:pointer', title: 'A Product Lead thinks through the project with you, answers questions about it and files GitHub issues; it does not write code' },
+        { for: 'role-toggle', style: 'display:flex;gap:8px;align-items:center;margin:10px 0 0;font-weight:700;cursor:pointer', title: 'A Product Lead is someone to talk the project through with: think out loud, brainstorm, ask about the code and docs. It files GitHub issues only if you ask; it does not write code' },
         roleBox,
-        '🧭 Hire as Product Lead (ideas, Q&A, files issues)',
+        '🧭 Hire as Product Lead (talk it through, brainstorm)',
       )
     : null;
   const repos = repoPicker(opts.worktreeOption ? opts.repoOptions : undefined, wtBox);

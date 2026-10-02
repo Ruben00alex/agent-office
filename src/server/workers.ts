@@ -1693,7 +1693,7 @@ export class WorkerManager {
       // The easy approvals lever (see approvals.ts): Claude Code's automatic permission mode.
       args.push(...approvalArgs('claude', easyApprovals.on, args));
       // The queue agent only ever adds to the queue: without these it can't touch the checkout's files.
-      // The Product Lead likewise only talks and files issues.
+      // The Product Lead likewise only talks (and files issues if asked).
       if (station === 'queue' || info.role) args.push('--disallowedTools', ...QUEUE_AGENT_DISALLOWED_TOOLS);
       if (resumeSessionId) args.push('--resume', resumeSessionId);
       // `--` so a prompt like "- fix login" is never parsed as a CLI option.

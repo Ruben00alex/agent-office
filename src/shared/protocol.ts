@@ -32,7 +32,7 @@ export type WorkerKind = 'agent' | 'shell';
  */
 export type WorkerAction = 'read' | 'edit' | 'test' | 'web' | 'failing';
 
-/** A desk worker's role besides writing code: the Product Lead thinks through the project, answers questions and files issues. */
+/** A desk worker's role besides writing code: the Product Lead talks the project through, brainstorms and answers questions. */
 export type WorkerRole = 'product-lead';
 export const WORKER_ROLES: Record<WorkerRole, { name: string; color: string }> = {
   'product-lead': { name: 'Product Lead', color: '#e76f51' },

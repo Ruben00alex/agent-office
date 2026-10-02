@@ -17,7 +17,7 @@ export interface WorkerRow {
   kind: 'agent' | 'shell';
   provider?: AgentProvider;
   model?: string;
-  /** Hired as the Product Lead, who talks and files issues instead of coding. */
+  /** Hired as the Product Lead, who talks the project through instead of coding. */
   role?: WorkerInfo['role'];
   desk: string;
   status: WorkerStatus;
