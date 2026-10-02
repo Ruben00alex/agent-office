@@ -1601,3 +1601,7 @@ a.when:hover { text-decoration: underline; }
   background: var(--paper); color: var(--ink); font-size: 13px; pointer-events: none;
 }
 .crosshair.remote { outline: 2px solid var(--accent); outline-offset: 5px; }
+
+.issue-edit-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.issue-edit-field input, .issue-edit-field textarea { flex-basis: 100%; }
+.issue-edit-field input:disabled, .issue-edit-field textarea:disabled { opacity: 1; color: inherit; }

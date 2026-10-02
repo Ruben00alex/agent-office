@@ -94,6 +94,15 @@ export class MaintenanceBoard {
     return { number, title: title.trim(), url };
   }
 
+  async edit(number: number, title: string, body: string, as?: GhAs) {
+    if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Bad issue number');
+    if (!this.github || !this.source || !this.state.repo) throw new Error('No maintenance repository');
+    if (!title.trim() || title.length > 200 || body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
+    await gh(['issue', 'edit', String(number), '--repo', this.state.repo, '--title', title.trim(), '--body', body], this.source, undefined, as?.env);
+    await this.refresh();
+    return { number, title: title.trim(), url: `https://github.com/${this.state.repo}/issues/${number}` };
+  }
+
   /** Queue membership lives on GitHub; the office stores only execution evidence. */
   async queue(number: number, queued: boolean, as?: GhAs) {
     const detail = await this.issue(number);

@@ -688,25 +688,28 @@ export async function startServer(cfg: Config) {
   const productHistory = new MaintenanceChatArchive(cfg.dataDir, 'product-chat-archive.json', 'Product Lead conversation', titler);
   const maintenanceImages = new MaintenanceImages(cfg.dataDir);
   const issueAs = new Map<string, ReturnType<typeof signins.ghAs>>();
-  const issueJobs = new IssueJobs(async (job) => {
-    const repo = maintenanceBoard.state.repo;
-    if (!repo) throw new Error('No maintenance repository');
-    const as = issueAs.get(job.id);
-    if (typeof as === 'string') throw new Error(as);
-    const images = maintenanceImages.resolve(job.attachments);
-    // A retry after the issue exists (only queueing failed) must not create a duplicate.
-    let issue = job.issue as Awaited<ReturnType<typeof maintenanceBoard.create>> | undefined;
-    if (!issue) {
-      const draft = await draftMaintenanceIssue(job.title, job.body, { writer: isIssueWriter(job.writer) ? job.writer : 'auto' });
-      issue = await maintenanceBoard.create(draft.title, draft.body, as);
+  const issueJobs = new IssueJobs(
+    job => draftMaintenanceIssue(job.title, job.body, { writer: isIssueWriter(job.writer) ? job.writer : 'auto', instructions: job.instructions }),
+    async (job, draft) => {
+      const repo = maintenanceBoard.state.repo;
+      if (!repo) throw new Error('No maintenance repository');
+      const as = issueAs.get(job.id);
+      if (typeof as === 'string') throw new Error(as);
+      if (job.number) return maintenanceBoard.edit(job.number, draft.title, draft.body, as);
+      const images = maintenanceImages.resolve(job.attachments);
+      // A failed queue update can be retried without creating a second issue.
+      const existed = !!job.issue;
+      const issue = job.issue ?? await maintenanceBoard.create(draft.title, draft.body, as);
       job.issue = issue;
-    }
-    if (job.queue) {
-      await maintenanceBoard.queue(issue.number, true, as);
-      maintenanceWork.queue(repo, issue, job.by, images);
-    }
-    return issue;
-  });
+      if (existed) {
+        await maintenanceBoard.edit(issue.number, draft.title, draft.body, as);
+      }
+      if (job.queue) {
+        await maintenanceBoard.queue(issue.number, true, as);
+        maintenanceWork.queue(repo, { ...issue, title: draft.title }, job.by, images);
+      }
+      return { ...issue, title: draft.title };
+    });
   const maintenanceWork = new MaintenanceWork(cfg.dataDir);
   let maintenanceStarting = false;
   const floorContext: FloorContext = {
@@ -1221,17 +1224,23 @@ export async function startServer(cfg: Config) {
           if (p === '/api/maintenance/issue') {
             const as = session.account ? signins.ghAs(session.account.id) : undefined;
             if (typeof as === 'string') throw new Error(as);
+            if (typeof body.job === 'string') {
+              if (body.confirm === true) return send(res, 200, await issueJobs.confirm(body.job, str(body.title, 201), str(body.body, 20001)));
+              if (body.retry === true) return send(res, 202, issueJobs.retry(body.job));
+              issueJobs.dismiss(body.job); issueAs.delete(body.job);
+              return send(res, 200, { ok: true });
+            }
+            const number = body.number === undefined ? undefined : Number(body.number);
+            if (number !== undefined && (!Number.isSafeInteger(number) || number <= 0)) throw new Error('Bad issue number');
+            if (number && body.save === true) return send(res, 200, await maintenanceBoard.edit(number, str(body.title, 201), str(body.body, 20001), as));
             maintenanceImages.resolve(body.attachments ?? []);
-            const input = { title: str(body.title, 201), body: str(body.body, 20001), queue: body.queue === true, writer: isIssueWriter(body.writer) ? body.writer : 'auto', attachments: Array.isArray(body.attachments) ? body.attachments.map(String) : [] };
+            const existing = number ? await maintenanceBoard.issue(number) : undefined;
+            const input = { title: existing?.title ?? str(body.title, 201), body: existing?.body ?? str(body.body, 20001), queue: body.queue === true, writer: isIssueWriter(body.writer) ? body.writer : 'auto', attachments: Array.isArray(body.attachments) ? body.attachments.map(String) : [], number, instructions: number ? str(body.instructions, 20001) : undefined };
             if (!input.title.trim() || input.title.length > 200 || input.body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
+            if (number && (!input.instructions?.trim() || input.instructions.length > 20000)) throw new Error('Describe the requested changes (up to 20,000 characters).');
             const job = issueJobs.start(input, by);
             issueAs.set(job.id, as);
             return send(res, 202, job);
-          }
-          if (typeof body.job === 'string') {
-            if (body.retry === true) { const job = issueJobs.retry(body.job); return send(res, 202, job); }
-            issueJobs.dismiss(body.job); issueAs.delete(body.job);
-            return send(res, 200, { ok: true });
           }
           const number = Number(body.number);
           if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Bad issue number');

@@ -724,6 +724,7 @@ export interface GhPullDetail {
 
 /** GET /api/gh/issue?number=N */
 export interface GhIssueDetail {
+  title?: string;
   number: number;
   /** OPEN or CLOSED. */
   state: string;

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import type { AddressInfo } from 'node:net';
@@ -39,7 +39,10 @@ else if (a[0] === 'issue' && a[1] === 'create') {
  const title = a[a.indexOf('--title') + 1];
  fs.writeFileSync(${JSON.stringify(path.join(root, 'created.json'))}, JSON.stringify({ title, args: a }));
  console.log('https://github.com/fork/agent-office/issues/7');
-} else if (a[0] === 'issue' && a[1] === 'view') console.log(JSON.stringify({ number: 7, state: 'OPEN', body: 'A captured idea', comments: [] }));
+} else if (a[0] === 'issue' && a[1] === 'edit') {
+ fs.writeFileSync(${JSON.stringify(path.join(root, 'edited.json'))}, JSON.stringify({ args: a }));
+ console.log('https://github.com/fork/agent-office/issues/7');
+} else if (a[0] === 'issue' && a[1] === 'view') console.log(JSON.stringify({ number: 7, title: 'Current GitHub title', state: 'OPEN', body: 'A captured idea', comments: [] }));
 else if(a[0] === 'issue' && a[1] === 'list' && a.includes('open') && fs.existsSync(${JSON.stringify(path.join(root, 'created.json'))})) console.log(JSON.stringify([{number:7,title:'Capture this idea',state:'OPEN',url:'https://github.com/fork/agent-office/issues/7',labels,assignees:[]} ]));
 else console.log('[]');
 `); chmodSync(cli, 0o755);
@@ -85,11 +88,17 @@ console.log(JSON.stringify({title:'Improve captured idea',body:'## Scope\\nGroun
     await new Promise(r => setTimeout(r, 50));
     done = (await (await fetch(`${base}/api/maintenance/issue-jobs`, { headers: { cookie } })).json()).jobs.find((j: { id: string }) => j.id === job.id);
   }
+  assert.equal(done.status, 'ready', done.error);
+  assert.equal(existsSync(path.join(root, 'created.json')), false, 'Drafting must not create an issue');
+  assert.equal((await (await fetch(`${base}/api/maintenance/chat`, { headers: { cookie } })).json()).work.length, 0);
+  const confirmed = await fetch(`${base}/api/maintenance/issue`, { method: 'POST', headers, body: JSON.stringify({ job: job.id, confirm: true, title: 'Reviewed captured idea', body: done.draft.body }) });
+  assert.equal(confirmed.status, 200, JSON.stringify(await confirmed.clone().json()));
+  done = await confirmed.json();
   assert.equal(done.status, 'done', done.error);
   assert.equal(done.issue.number, 7);
   const sent = JSON.parse(readFileSync(path.join(root, 'created.json'), 'utf8'));
   assert.ok(sent.args.includes('fork/agent-office'));
-  assert.equal(sent.title, 'Improve captured idea');
+  assert.equal(sent.title, 'Reviewed captured idea');
   assert.match(sent.args[sent.args.indexOf('--body') + 1], /Acceptance criteria/);
   const draftArgs = JSON.parse(readFileSync(path.join(root, 'draft-args.json'), 'utf8'));
   assert.equal(draftArgs[draftArgs.indexOf('--model') + 1], 'gpt-6-luna');
@@ -99,6 +108,33 @@ console.log(JSON.stringify({title:'Improve captured idea',body:'## Scope\\nGroun
   assert.equal(work.work[0].status, 'queued'); assert.equal(work.work[0].number, 7);
   assert.deepEqual(work.work[0].attachments, [image]);
   assert.equal(work.conversations.length, 0, 'Capturing an idea must not create an agent conversation');
+  // Manual and AI editing update the same issue without changing its queue or evidence.
+  const manual = await fetch(`${base}/api/maintenance/issue`, { method: 'POST', headers, body: JSON.stringify({ number: 7, save: true, title: 'Manual title', body: 'Manual body' }) });
+  assert.equal(manual.status, 200);
+  let editArgs = JSON.parse(readFileSync(path.join(root, 'edited.json'), 'utf8')).args;
+  assert.equal(editArgs[2], '7'); assert.equal(editArgs[editArgs.indexOf('--title') + 1], 'Manual title');
+  assert.ok(editArgs.includes('fork/agent-office'));
+  const revised = await fetch(`${base}/api/maintenance/issue`, { method: 'POST', headers, body: JSON.stringify({ number: 7, writer: 'codex', instructions: 'Clarify criteria' }) });
+  assert.equal(revised.status, 202);
+  let revision = await revised.json();
+  for (let i = 0; i < 100 && revision.status === 'drafting'; i++) {
+    await new Promise(r => setTimeout(r, 50));
+    revision = (await (await fetch(`${base}/api/maintenance/issue-jobs`, { headers: { cookie } })).json()).jobs.find((j: { id: string }) => j.id === revision.id);
+  }
+  assert.equal(revision.status, 'ready');
+  assert.equal(revision.title, 'Current GitHub title');
+  assert.equal(revision.body, 'A captured idea');
+  assert.equal(revision.number, 7);
+  assert.match(JSON.parse(readFileSync(path.join(root, 'draft-args.json'), 'utf8')).join(' '), /Clarify criteria/);
+  const savedRevision = await fetch(`${base}/api/maintenance/issue`, { method: 'POST', headers, body: JSON.stringify({ job: revision.id, confirm: true, title: 'Reviewed revision', body: 'Reviewed body' }) });
+  assert.equal(savedRevision.status, 200);
+  editArgs = JSON.parse(readFileSync(path.join(root, 'edited.json'), 'utf8')).args;
+  assert.equal(editArgs[2], '7'); assert.equal(editArgs[editArgs.indexOf('--body') + 1], 'Reviewed body');
+  assert.equal(JSON.parse(readFileSync(path.join(root, 'created.json'), 'utf8')).title, 'Reviewed captured idea', 'Editing must not create a duplicate');
+  const afterEdit = await (await fetch(`${base}/api/maintenance/chat`, { headers: { cookie } })).json();
+  assert.equal(afterEdit.work[0].status, 'queued');
+  assert.deepEqual(afterEdit.work[0].attachments, [image]);
+  assert.equal(JSON.parse(readFileSync(path.join(root, 'labels.json'), 'utf8'))[0].name, 'maintenance:queued');
   // Verify websocket issue dispatch and screenshot delivery without launching a real provider CLI.
   const floor = office.floors()[0];
   let live: WorkerInfo | undefined;

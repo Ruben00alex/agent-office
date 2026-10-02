@@ -3,6 +3,7 @@ import { MAINTENANCE_DESK } from '../../shared/layout';
 import { store } from '../state';
 import { h, openModal, timeAgo } from './dom';
 import { maintenancePost, openMaintenanceIssueCreate } from './maintenance-work';
+import { openIssueEditor } from './maintenance-issue-editor';
 import { markdown } from './markdown';
 
 export async function maintenanceJson<T>(url: string): Promise<T> {
@@ -38,8 +39,14 @@ export function openMaintenanceIssue(issue: GhIssue, correct: (context?: string)
   const modal = openModal(h('div.modal.maintenance-issue', { role: 'dialog', 'aria-label': 'Agent Office issue' },
     h('header', {}, h('h2', {}, `🛠️ Agent Office · #${issue.number}`)), body));
   void maintenanceJson<GhIssueDetail>(`/api/maintenance/issue?number=${issue.number}`).then((detail) => {
-    body.replaceChildren(h('h3', {}, issue.title), h('p.setting-note', {}, `${store.maintenanceIssues.repo ?? 'Agent Office source repository'} · ${detail.state}${issue.doneBy && detail.state === 'OPEN' ? ` · ✅ ${issue.doneBy}, still open: close it if the work is done` : ''}`),
+    const pencil = (field: 'title' | 'description') => h('button', { type: 'button', 'aria-label': `Edit ${field}`, title: `Edit ${field}`, onclick: () => {
+      modal.close(); openIssueEditor({ issue, field, saved: () => send?.({ t: 'maintenance.issues' }) });
+    } }, '✎');
+    body.replaceChildren(h('div.issue-edit-field', {}, h('h3', {}, detail.title ?? issue.title), pencil('title')),
+      h('p.setting-note', {}, `${store.maintenanceIssues.repo ?? 'Agent Office source repository'} · ${detail.state}${issue.doneBy && detail.state === 'OPEN' ? ` · ✅ ${issue.doneBy}, still open: close it if the work is done` : ''}`),
+      h('div.issue-edit-field', {}, h('strong', {}, 'Description'), pencil('description')),
       h('div', {}, markdown(detail.body || '_No description._')),
+      h('button.btn', { type: 'button', onclick: () => { modal.close(); openIssueEditor({ issue, saved: () => send?.({ t: 'maintenance.issues' }) }); } }, 'Edit with AI'),
       h('button.btn.primary', { type: 'button', onclick: () => { modal.close(); correct(`Agent Office issue #${issue.number}: ${issue.title}\n${issue.url}`); } }, '🛠️ Ask Maintenance about this'),
       ...(detail.state === 'OPEN' && send ? [h('button.btn', { type: 'button', onclick: () => { void maintenancePost('/api/maintenance/queue', { number: issue.number }).then(() => { modal.close(); send({ t: 'maintenance.issues' }); }).catch(error => body.append(h('p.setting-note.bad', { role: 'alert' }, error.message))); } }, 'Add to Maintenance queue'), h('button.btn', { type: 'button', title: 'Close this issue on GitHub', onclick: () => { void maintenancePost('/api/maintenance/queue', { number: issue.number, close: true }).then(() => { modal.close(); send({ t: 'maintenance.issues' }); }).catch(error => body.append(h('p.setting-note.bad', { role: 'alert' }, `Couldn't close #${issue.number}: ${error.message}`))); } }, '✓ Close issue'), h('button.btn.primary', { type: 'button', onclick: () => { if (issue.doneBy && !confirm(`#${issue.number} looks already done (${issue.doneBy}) but is still open. Start Maintenance on it anyway?`)) return; send({ t: 'station.prompt', deskId: MAINTENANCE_DESK, prompt: '', maintenanceIssue: issue.number }); modal.close(); } }, '🚧 Move to In progress & start Maintenance')] : []),
       h('a.btn', { href: issue.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open on GitHub ↗'),

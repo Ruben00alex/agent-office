@@ -4,6 +4,7 @@ import { h, openModal, toast } from './dom';
 import { openMaintenanceIssue } from './maintenance-board';
 import { maintenanceIssueColumns, maintenanceQueued } from '../../shared/maintenance-issues';
 import { imageComposer, imageEvidence } from './maintenance-images';
+import { openIssueEditor } from './maintenance-issue-editor';
 import { openStackChange } from './maintenance';
 
 export async function maintenancePost<T>(url: string, body: unknown): Promise<T> {
@@ -13,7 +14,7 @@ export async function maintenancePost<T>(url: string, body: unknown): Promise<T>
   return data;
 }
 
-interface IssueJobView { id: string; title: string; body: string; queue: boolean; writer: string; attachments: string[]; status: 'drafting' | 'done' | 'failed'; error?: string; issue?: { number: number; url: string; title: string } }
+export interface IssueJobView { id: string; title: string; body: string; queue: boolean; writer: string; attachments: string[]; number?: number; draft?: { title: string; body: string }; status: 'drafting' | 'ready' | 'saving' | 'done' | 'failed'; error?: string; issue?: { number: number; url: string; title: string } }
 const jobStatus = new Map<string, IssueJobView['status']>();
 const jobListeners = new Set<(jobs: IssueJobView[]) => void>();
 let jobPoll: number | undefined;
@@ -27,7 +28,8 @@ async function pollIssueJobs() {
       const before = jobStatus.get(job.id);
       jobStatus.set(job.id, job.status);
       if (before !== 'drafting' || job.status === 'drafting') continue;
-      if (job.status === 'done') { toast(`Issue #${job.issue?.number} created: ${job.issue?.title}`); jobsDone(); }
+      if (job.status === 'ready') toast(`Draft “${job.title}” is ready to review. Open + Add issue to review and save it.`);
+      else if (job.status === 'done') { toast(`Issue #${job.issue?.number} created: ${job.issue?.title}`); jobsDone(); }
       else toast(`Issue draft “${job.title}” failed: ${job.error}. Open + Add issue to retry or edit it.`, 'error');
     }
     for (const fn of jobListeners) fn(jobs);
@@ -46,7 +48,7 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   let completed = false;
   const draftKey = 'agent-office.maintenance-issue-draft-v1';
   const save = () => { if (completed) return; try { localStorage.setItem(draftKey, JSON.stringify({ title: title.value, body: description.value, attachments: images.images, queue: queue.checked })); } catch { /* Storage unavailable. */ } };
-  const submit = h('button.btn.primary', { type: 'submit' }, 'Create GitHub issue & queue');
+  const submit = h('button.btn.primary', { type: 'submit' }, 'Draft issue for review');
   const images = imageComposer(() => { save(); submit.disabled = sending || images.uploading; }, showError);
   const queue = h('input', { type: 'checkbox', checked: true });
   const writer = h('select', { 'aria-label': 'Issue writer model' },
@@ -54,7 +56,7 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   const writerKey = 'agent-office.maintenance-issue-writer-v1';
   try { const saved = localStorage.getItem(writerKey); if (saved === 'codex' || saved === 'claude') writer.value = saved; } catch { /* Storage unavailable. */ }
   writer.addEventListener('change', () => { try { localStorage.setItem(writerKey, writer.value); } catch { /* Storage unavailable. */ } });
-  const updateLabel = () => { submit.textContent = queue.checked ? 'Create GitHub issue & queue' : 'Create GitHub issue'; };
+  const updateLabel = () => { submit.textContent = 'Draft issue for review'; };
   queue.addEventListener('change', () => { updateLabel(); save(); });
   title.addEventListener('input', save); description.addEventListener('input', save);
   try { const draft = JSON.parse(localStorage.getItem(draftKey) ?? 'null'); if (draft) { title.value = typeof draft.title === 'string' ? draft.title : ''; description.value = typeof draft.body === 'string' ? draft.body : ''; queue.checked = draft.queue !== false; images.set(Array.isArray(draft.attachments) ? draft.attachments.filter((i: MaintenanceAttachment) => i && /^[a-f0-9-]{36}$/.test(i.id)) : []); updateLabel(); } } catch { /* Storage unavailable. */ }
@@ -62,17 +64,18 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   const renderJobs = (jobs: IssueJobView[]) => {
     const shown = jobs.filter(j => j.status !== 'done');
     jobsBox.classList.toggle('hidden', !shown.length);
-    jobsBox.replaceChildren(...shown.map(job => job.status === 'drafting'
+    jobsBox.replaceChildren(...shown.map(job => job.status === 'drafting' || job.status === 'saving'
       ? h('p', {}, `⏳ Drafting “${job.title}” in the background. You can close this and keep using the office.`)
+      : job.draft ? h('p', {}, `Draft “${job.draft.title}” ready for review. ${job.error ?? ''} `, h('button', { type: 'button', onclick: () => { modal.close(); openIssueEditor({ job, saved: () => { saved(); void pollIssueJobs(); } }); } }, 'Review draft'), h('button', { type: 'button', onclick: () => void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()).catch(err => showError(err.message)) }, 'Dismiss'))
       : h('p.maintenance-chat-error', {}, `Draft “${job.title}” failed: ${job.error} `,
         h('button', { type: 'button', onclick: () => void maintenancePost('/api/maintenance/issue', { job: job.id, retry: true }).then(() => watchIssueJobs()).catch(err => showError(err.message)) }, 'Retry'), ' ',
-        h('button', { type: 'button', onclick: () => { title.value = job.title; description.value = job.body; queue.checked = job.queue; writer.value = job.writer; updateLabel(); save(); void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()); } }, 'Edit in form'), ' ',
+        h('button', { type: 'button', onclick: () => { if (job.number) { const issue = store.maintenanceIssues.items.find(issue => issue.number === job.number); if (!issue) { showError('Refresh the issue list before editing this issue.'); return; } modal.close(); openIssueEditor({ issue, saved }); return; } title.value = job.title; description.value = job.body; queue.checked = job.queue; writer.value = job.writer; updateLabel(); save(); void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()); } }, 'Edit in form'), ' ',
         h('button', { type: 'button', onclick: () => void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()) }, 'Dismiss'))));
   };
   jobListeners.add(renderJobs);
   const form = h('form.modal.maintenance-issue-create', { role: 'dialog', 'aria-label': 'Create maintenance issue' },
     h('header', {}, h('h2', {}, 'Capture an idea')),
-    h('div.body', {}, h('p', {}, `Creates an issue in ${store.maintenanceIssues.repo ?? 'Agent Office’s repository'}. A small model (gpt-6-luna on Codex, or Claude Code with haiku if Codex is unavailable) reads the office source and crafts a technical issue from your idea. Drafting continues in the background, even if you close this. Maintenance keeps working on its current task.`), error, jobsBox, title, description, images.element,
+    h('div.body', {}, h('p', {}, `Drafts an issue for review in ${store.maintenanceIssues.repo ?? 'Agent Office’s repository'}. Nothing is created until you review and confirm. A small model (gpt-6-luna on Codex, or Claude Code with haiku if Codex is unavailable) reads the office source and crafts a technical issue from your idea. Drafting continues in the background, even if you close this. Maintenance keeps working on its current task.`), error, jobsBox, title, description, images.element,
       h('label', {}, 'Written by ', writer),
       h('label', {}, queue, ' Add to the Maintenance queue'), h('p.setting-note', {}, 'Start queued work when the agent is free. Screenshots stay with the queued item in the office; they are not published to GitHub.')),
     h('footer', {}, submit));
@@ -83,7 +86,7 @@ export function openMaintenanceIssueCreate(saved: () => void) {
     if (!queue.checked && images.images.length) { showError('Keep “Add to the Maintenance queue” checked to retain screenshot evidence with this issue.'); return; }
     sending = true; submit.textContent = 'Starting…'; submit.disabled = true; showError('');
     void maintenancePost<IssueJobView>('/api/maintenance/issue', { title: title.value, body: description.value, queue: queue.checked, writer: writer.value, attachments: images.images.map(i => i.id) })
-      .then(job => { completed = true; try { localStorage.removeItem(draftKey); } catch { /* Storage unavailable. */ } jobStatus.set(job.id, 'drafting'); toast(`Drafting “${job.title}” in the background. You’ll be told when the issue is created.`); modal.close(); watchIssueJobs(); })
+      .then(job => { completed = true; try { localStorage.removeItem(draftKey); } catch { /* Storage unavailable. */ } jobStatus.set(job.id, 'drafting'); toast(`Drafting “${job.title}” in the background. You’ll be told when it is ready for review.`); modal.close(); watchIssueJobs(); })
       .catch(err => { showError(err.message); sending = false; updateLabel(); submit.disabled = false; });
   });
   watchIssueJobs();
@@ -118,7 +121,7 @@ export function workPanelParts(state: MaintenanceChatState, send: (message: Clie
     for (const issue of column.items) {
       const item = work.find(i => i.number === issue.number);
       const card = h('article.maintenance-work-card', {}, h('button.maintenance-issue-title', { type: 'button', onclick: () => openMaintenanceIssue(issue, correct, send) }, `#${issue.number} · ${issue.title}`),
-        h('a', { href: issue.url, target: '_blank', rel: 'noopener noreferrer' }, 'GitHub ↗'));
+        h('a', { href: issue.url, target: '_blank', rel: 'noopener noreferrer' }, 'GitHub ↗'), h('button', { type: 'button', 'aria-label': `Edit issue #${issue.number}`, onclick: () => openIssueEditor({ issue, saved: refresh }) }, '✎ Edit'));
       card.addEventListener('click', e => { if (!(e.target as Element).closest('button, a, img, input, select, textarea, summary')) openMaintenanceIssue(issue, correct, send); });
       if (issue.state === 'OPEN' && issue.doneBy) card.append(h('small', {}, `✅ ${issue.doneBy}, still open on GitHub`));
       if (issue.assignees.length) card.append(h('small', {}, `Assigned to ${issue.assignees.join(', ')}`));

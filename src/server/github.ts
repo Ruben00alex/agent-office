@@ -219,9 +219,9 @@ export class GitHub {
   }
 
   async issueDetail(n: number, me?: string): Promise<GhIssueDetail> {
-    const [view, viewer] = await Promise.all([this.run(['issue', 'view', String(n), '--json', 'number,state,body,comments'], this.dir), me ?? this.viewer()]);
+    const [view, viewer] = await Promise.all([this.run(['issue', 'view', String(n), '--json', 'number,title,state,body,comments'], this.dir), me ?? this.viewer()]);
     const i = JSON.parse(view);
-    return { number: i.number, state: i.state, body: String(i.body ?? ''), comments: commentsOf(i.comments), viewer };
+    return { number: i.number, title: String(i.title ?? ''), state: i.state, body: String(i.body ?? ''), comments: commentsOf(i.comments), viewer };
   }
 
   /**
