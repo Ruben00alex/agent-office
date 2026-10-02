@@ -3,7 +3,7 @@ import { PRODUCT_DESK } from '../../shared/layout';
 import { store } from '../state';
 import { h, openModal } from './dom';
 import { maintenanceContent } from './maintenance-chat';
-import { maintenanceJson } from './maintenance-board';
+import { generateTitleButton, maintenanceJson } from './maintenance-board';
 import { providerPicker, workerChoice } from './provider';
 
 type Sent = Extract<ServerMsg, { t: 'product.chat.sent' }>;
@@ -50,6 +50,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
   const input = h('textarea', { rows: 2, maxlength: 20000, placeholder: 'What’s on your mind about the project?', 'aria-label': 'Message to the Product Lead' });
   const older = h('button.maintenance-older.hidden', { type: 'button' }, 'Load earlier messages');
   const submit = h('button.maintenance-send', { type: 'submit' }, 'Send');
+  const retitle = generateTitleButton('/api/product/chat-title', () => state?.conversation?.id, () => void refresh(), (m) => showError(m));
   const terminal = h('button', { type: 'button', onclick: () => { if (state?.worker) { modal.close(); watch(state.worker); } } }, 'Open terminal');
   const current = h('button.maintenance-current', { type: 'button', onclick: () => { saveDraft(); newConversation = false; selected = undefined; loadedDraft = ''; messageKey = ''; messages = []; void refresh(); } }, 'Current conversation');
   const create = h('button.maintenance-new', { type: 'button', onclick: () => {
@@ -62,7 +63,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
   const close = h('button.close', { type: 'button', 'aria-label': 'Close Product Lead chat' }, '✕');
   const el = h('div.modal.maintenance-chat.product-chat', { role: 'dialog', 'aria-label': 'Chat with the Product Lead' },
     h('header', {}, h('div', {}, h('span.maintenance-experiment', {}, 'AGENT OFFICE · PRODUCT'), h('h2', {}, '🧭 Product Lead'), status),
-      h('div.maintenance-chat-tools', {}, terminal, close)),
+      h('div.maintenance-chat-tools', {}, retitle, terminal, close)),
     h('div.maintenance-chat-layout', {},
       h('aside', {}, create, current, h('h3', {}, 'Past conversations'), h('small', {}, 'Shared with everyone on this floor'), search, archive),
       h('section.maintenance-chat-main', {}, older, list, model.element, form)));

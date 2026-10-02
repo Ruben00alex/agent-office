@@ -118,3 +118,16 @@ test('archive titles started issues from the issue and other chats with the titl
   assert.equal(archive.list().find(c => c.id === 'chat')!.title, 'Fix the jukebox volume');
   assert.deepEqual(seen, ['the jukebox is way too loud please fix']);
 });
+
+test('generateTitle retitles an already titled conversation on demand and rejects when it cannot', async (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'maintenance-retitle-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let answer: string | undefined = 'Louder jukebox';
+  const archive = new MaintenanceChatArchive(dir, undefined, undefined, async () => answer);
+  archive.capture({ id: 'issue', createdAt: 1 } as WorkerInfo, [{ id: 'a', role: 'user', content: 'Implement Agent Office issue #12: Add a dartboard', at: 2 }]);
+  assert.equal(await archive.generateTitle('issue'), 'Louder jukebox');
+  assert.equal(new MaintenanceChatArchive(dir).list()[0].title, 'Louder jukebox');
+  answer = undefined;
+  await assert.rejects(archive.generateTitle('issue'), /didn't answer/);
+  await assert.rejects(archive.generateTitle('missing'), /No such conversation/);
+});

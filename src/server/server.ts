@@ -1186,6 +1186,14 @@ export async function startServer(cfg: Config) {
           return send(res, 200, image);
         } catch (err) { return send(res, 400, { error: (err as Error).message }); }
       }
+      if (['/api/maintenance/chat-title', '/api/product/chat-title'].includes(p) && req.method === 'POST') {
+        if (!sameOrigin(req, cfg)) return send(res, 403, { error: 'Forbidden' });
+        try {
+          const body = JSON.parse(await readBody(req, 1000));
+          const title = await (p.includes('product') ? productHistory : maintenanceHistory).generateTitle(str(body.id, 100));
+          return send(res, 200, { title });
+        } catch (err) { return send(res, 400, { error: (err as Error).message }); }
+      }
       if (['/api/maintenance/issue', '/api/maintenance/queue'].includes(p) && req.method === 'POST') {
         if (!sameOrigin(req, cfg)) return send(res, 403, { error: 'Forbidden' });
         try {

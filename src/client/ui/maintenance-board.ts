@@ -12,6 +12,23 @@ export async function maintenanceJson<T>(url: string): Promise<T> {
   return data as T;
 }
 
+/** The "Generate title" button: asks the server for a fresh title for the conversation `id()` returns, then calls `done`. */
+export function generateTitleButton(endpoint: string, id: () => string | undefined, done: () => void, fail: (message: string) => void) {
+  const button = h('button', { type: 'button', title: 'Write a short title for this conversation from its first message', onclick: async () => {
+    const thread = id();
+    if (!thread || button.disabled) return;
+    button.disabled = true; button.textContent = 'Titling…';
+    try {
+      const response = await fetch(endpoint, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: thread }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+      done();
+    } catch (err) { fail((err as Error).message); }
+    button.disabled = false; button.textContent = 'Generate title';
+  } }, 'Generate title') as HTMLButtonElement;
+  return button;
+}
+
 export { maintenanceIssueColumns } from '../../shared/maintenance-issues';
 import { maintenanceIssueColumns } from '../../shared/maintenance-issues';
 

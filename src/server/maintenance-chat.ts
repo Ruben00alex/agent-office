@@ -162,17 +162,25 @@ export class MaintenanceChatArchive {
   }
   private titling = new Set<string>();
   private async retitle(id: string, first: string) {
-    if (this.titling.has(id)) return;
+    try { await this.generateTitle(id, first); } catch { /* Keep the cut-down opening as the title. */ }
+  }
+  /** Asks the titler for a title now, even for a conversation that already has one (the "Generate title" button); throws when it can't. */
+  async generateTitle(id: string, opening?: string): Promise<string> {
+    const c = this.conversations.find(c => c.id === id);
+    if (!c) throw new Error('No such conversation');
+    if (!this.titler) throw new Error('Titles can\'t be generated here');
+    const first = opening ?? c.messages.find(m => m.role === 'user')?.content;
+    if (!first) throw new Error('This conversation has no request to title yet');
+    if (this.titling.has(id)) throw new Error('A title is already being generated');
     this.titling.add(id);
     try {
-      const raw = await this.titler!(first.slice(0, 600));
+      const raw = await this.titler(first.slice(0, 600));
       const title = raw?.split('\n')[0].replace(/^["'`\s]+|["'`.\s]+$/g, '').slice(0, 100);
-      const c = this.conversations.find(c => c.id === id);
-      if (!title || !c) return;
+      if (!title) throw new Error("The title writer didn't answer. Try again.");
       const next = this.conversations.map(x => x.id === id ? { ...x, title, titled: true } : x);
       writeFileSync(this.file + '.tmp', JSON.stringify(next), { mode: 0o600 });
       renameSync(this.file + '.tmp', this.file);
       this.conversations = next;
-    } catch { /* Keep the cut-down opening as the title. */ } finally { this.titling.delete(id); }
-  }
-}
+      return title;
+    } finally { this.titling.delete(id); }
+  }}

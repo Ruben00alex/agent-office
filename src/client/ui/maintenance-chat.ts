@@ -2,7 +2,7 @@ import type { ClientMsg, MaintenanceAttachment, MaintenanceChatMessage, Maintena
 import { store } from '../state';
 import { h, openModal } from './dom';
 import { markdown } from './markdown';
-import { maintenanceJson } from './maintenance-board';
+import { generateTitleButton, maintenanceJson } from './maintenance-board';
 import { openStackChange, type MaintenanceActions } from './maintenance';
 import { confirmDialog } from './prompt';
 import { providerPicker, workerChoice } from './provider';
@@ -107,10 +107,11 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
   const model = providerPicker(store.project, 'maintenance-provider', 'Runs on', () => newConversation || tab === 'work' ? undefined : workerChoice(state?.worker));
   model.element.addEventListener('click', () => setTimeout(updateControls));
   const form = h('form.maintenance-chat-composer', {}, error, input, images.element, h('div.maintenance-composer-bottom', {}, note, submit));
+  const retitle = generateTitleButton('/api/maintenance/chat-title', () => state?.conversation?.id, () => void refresh(), (m) => showError(m));
   const close = h('button.close', { type: 'button', 'aria-label': 'Close Maintenance chat' }, '✕');
   const el = h('div.modal.maintenance-chat', { role: 'dialog', 'aria-label': 'Maintenance engineering workspace' },
     h('header', {}, h('div', {}, h('span.maintenance-experiment', {}, 'AGENT OFFICE · ENGINEERING'), h('h2', {}, 'Maintenance'), status),
-      h('div.maintenance-chat-tools', {}, h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, 'Review stack'), terminal, end, close)),
+      h('div.maintenance-chat-tools', {}, h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, 'Review stack'), retitle, terminal, end, close)),
     h('div.maintenance-chat-layout', {},
       h('aside', {}, capture, create, current, h('h3', {}, 'Conversation archive'), h('small', {}, 'Shared with the office · saved across restarts'), search, archive),
       h('section.maintenance-chat-main', {}, tabs, older, list, work, review, model.element, form), consoleRail));
