@@ -1,0 +1,83 @@
+// Run against an isolated Vite preview on 5199; never connects to the live office.
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader'] });
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/api/**', r => r.fulfill({ json: {} }));
+  await page.routeWebSocket('**/ws**', () => {});
+  await page.addInitScript(() => localStorage.setItem('agent-office.profile', JSON.stringify({ name: 'Remote tester', color: '#06d6a0', look: { skin: 0, hair: 0, style: 0 } })));
+  await page.goto('http://127.0.0.1:5199/');
+  await page.waitForFunction(() => !!window.__office);
+  await page.evaluate(async () => {
+    const THREE = await import('/@id/three');
+    const o = window.__office;
+    o.player.pos.set(0, 60, 0);
+    o.player.rig = () => {};
+    o.player.setView('first');
+    o.player.camYaw = 0;
+    o.player.lookPitch = 0;
+    o.camera.rotation.set(0, 0, 0);
+    o.player.updateCamera(true);
+    // A visible board twenty metres away, isolated from the room's other geometry.
+    const board = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 0.2), new THREE.MeshBasicMaterial({ color: '#ffd166' }));
+    board.position.set(0, 61.4, -20);
+    board.userData.interact = { kind: 'services', x: 0, z: -20, radius: 1 };
+    o.office.group.add(board);
+    window.makeBlocker = () => {
+      const blocker = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 0.2), new THREE.MeshBasicMaterial());
+      blocker.position.set(0, 61.4, -10);
+      o.office.group.add(blocker);
+      return blocker;
+    };
+    window.remoteBoard = board;
+    document.querySelector('#loading')?.remove();
+  });
+  const active = () => page.locator('.remote-indicator').isVisible();
+  await page.waitForFunction(() => !document.querySelector('.crosshair').classList.contains('on'));
+  await page.keyboard.press('e');
+  assert.equal(await page.locator('.modal').count(), 0, 'normal reach cannot use the distant board');
+  await page.keyboard.press('Control+e');
+  assert.equal(await active(), true);
+  await page.waitForFunction(() => document.querySelector('#hint').textContent.includes('Services'));
+  assert.equal(await page.locator('.crosshair.remote.on').count(), 1);
+  await page.screenshot({ path: '/tmp/agent-office-remote-interaction.png' });
+  await page.evaluate(() => { window.remoteBlocker = makeBlocker(); });
+  await page.waitForFunction(() => !document.querySelector('.crosshair').classList.contains('on'));
+  assert.equal(await page.locator('.crosshair.remote.on').count(), 0, 'closer noninteractive geometry blocks remote aim');
+  await page.evaluate(() => remoteBlocker.removeFromParent());
+  await page.waitForFunction(() => document.querySelector('#hint').textContent.includes('Services') && !document.querySelector('#hint').classList.contains('hidden'));
+  await page.keyboard.press('e');
+  assert.equal(await active(), false, 'successful use exits remote mode');
+  assert.equal(await page.locator('.modal').count(), 1, 'same board interaction opens remotely');
+  await page.keyboard.press('Control+e');
+  assert.equal(await active(), false, 'modal blocks toggle');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+e');
+  assert.equal(await active(), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await active(), false);
+  await page.keyboard.press('Control+e');
+  await page.keyboard.press('Control+e');
+  assert.equal(await active(), false, 'toggle again exits');
+  await page.keyboard.press('Control+e');
+  await page.keyboard.press('t');
+  assert.equal(await active(), false, 'chat focus exits immediately');
+  await page.keyboard.press('Control+e');
+  assert.equal(await active(), false, 'typing blocks toggle');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { remoteBoard.userData.interact.kind = 'ladder'; });
+  await page.keyboard.press('Control+e');
+  await page.waitForFunction(() => !document.querySelector('.crosshair').classList.contains('on'));
+  assert.equal(await page.locator('.crosshair.remote.on').count(), 0, 'physical movement objects cannot be used remotely');
+  await page.keyboard.press('e');
+  assert.equal(await page.evaluate(() => __office.climber.active), false);
+  assert.equal(await active(), true, 'unsuccessful use does not exit');
+  await page.keyboard.press('Escape');
+  assert.deepEqual(errors, []);
+  console.log('Remote interaction browser checks passed');
+} finally {
+  await browser.close();
+}

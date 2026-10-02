@@ -98,7 +98,7 @@ import { EMOTE_BY_ID, EmoteBucket, type EmoteId } from '../shared/emotes';
 import { EmoteWheel } from './ui/emotes';
 import { whereabouts } from './ui/whereabouts';
 import { wayTo } from './walkto';
-import { DESK_KEYS, interactionAvailable, type DeskKey } from './interaction';
+import { DESK_KEYS, interactionAvailable, remoteInteractionAllowed, type DeskKey } from './interaction';
 import { MeetingBoardTexture, MeetingSignTexture } from './world/meeting';
 import { issueMeeting, openMeeting, type MeetingPreset } from './ui/meeting';
 import { TelescopeView } from './telescope';
@@ -3776,7 +3776,7 @@ function hintFor(it: Interactable): Hint {
     case 'maintenanceIssues':
       return aimedNote ? { k: String(aimedNote.number), parts: [title(clip(`📌 #${aimedNote.number} ${aimedNote.title}`, 60)), key('E', 'Read it')] } : board('🛠️ Agent Office issues · Kanban');
     case 'issues':
-      if (aimedNote) return { k: String(aimedNote.number), parts: [title(clip(`📌 #${aimedNote.number} ${aimedNote.title}`, 60)), key('E', 'Take it'), key('O', 'Read it')] };
+      if (aimedNote) return { k: String(aimedNote.number), parts: [title(clip(`📌 #${aimedNote.number} ${aimedNote.title}`, 60)), key('E', remoteMode ? 'Read it remotely' : 'Take it'), key('O', 'Read it')] };
       return issuesTex.hasNotes ? { k: 'notes', parts: [title('📌 Issues board'), key('E', 'Open'), aside('or point at a note to take it')] } : board('📌 Issues board');
     case 'pulls':
       return board('🔀 Pull request board');
@@ -4140,12 +4140,13 @@ const finePointer = window.matchMedia('(pointer: fine)').matches;
 function renderCrosshair() {
   const show = player.view === 'first' && !modalOpen() && !golf.active && !thrower.active;
   const free = show && finePointer && player.canLock && !player.locked;
-  const k = `${show}|${!!target}|${free}|${relookOnKey}`;
+  const k = `${show}|${!!target}|${free}|${relookOnKey}|${remoteMode}`;
   if (k === crossKey) return;
   crossKey = k;
   const el = $('crosshair');
   el.classList.toggle('hidden', !show);
   el.classList.toggle('on', !!target);
+  el.classList.toggle('remote', remoteMode);
   el.classList.toggle('free', free);
   el.querySelector('.look-hint')!.textContent = relookOnKey ? 'Press a key or click to look around' : 'Click to look around';
 }
@@ -4196,16 +4197,51 @@ function popEmoji(id: EmoteId) {
 
 /** Keys that use what you're facing: at a desk, each does something else (see interact). */
 function use(it: Interactable | null, key: DeskKey, note = aimedNote): boolean {
+  if (remoteMode && (remoteBlocked() || !it || !remoteInteractionAllowed(it.kind))) return false;
+  const remote = remoteMode;
+  // Read issue cards remotely, never take them off the board.
+  if (remote && it?.kind === 'issues' && note && key === 'E') key = 'O';
   const worker = it?.deskId ? store.workerAtDesk(it.deskId) : undefined;
   const room = !!(it?.deskId && plan().byId.get(it.deskId)?.room);
   if (!interactionAvailable(it, key, { worker, room, note, carrying: !!carrying })) return false;
   reach();
   interact(it, key, note);
+  if (remote) setRemoteMode(false);
   return true;
 }
 
+// Remote aim uses the same ray and interactions, without changing local reach distances.
+let remoteMode = false;
+const remoteIndicator = h('div.remote-indicator.hidden', { role: 'status' }, '✋ Remote interaction · Aim at an object · E to use · Ctrl+E / Esc to exit');
+$('hud').append(remoteIndicator);
+function setRemoteMode(on: boolean) {
+  remoteMode = on;
+  remoteIndicator.classList.toggle('hidden', !on);
+  target = null;
+  aimedNote = null;
+  hintKey = '';
+}
+function remoteBlocked(): boolean {
+  return modalOpen() || isTyping() || !!carrying || holdingBall() || telescope.active || hanger.active ||
+    climber.active || golf.active || thrower.active || driver.active || emoteWheel.isOpen || !!trip;
+}
+document.addEventListener('focusin', () => { if (isTyping()) setRemoteMode(false); });
+window.addEventListener('blur', () => setRemoteMode(false));
+store.on('floor', () => setRemoteMode(false));
+
 // ---- Input ----------------------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
+  if (remoteMode && remoteBlocked()) setRemoteMode(false);
+  if (remoteMode && e.code === 'Escape') {
+    setRemoteMode(false);
+    e.preventDefault();
+    return;
+  }
+  if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.code === 'KeyE' && !remoteBlocked()) {
+    e.preventDefault();
+    if (!e.repeat) setRemoteMode(!remoteMode);
+    return;
+  }
   if (telescope.active) {
     if (e.code === 'Escape' || e.code === 'KeyE' || e.code === 'KeyF') telescope.exit();
     e.preventDefault();
@@ -4408,6 +4444,7 @@ window.addEventListener('pointerdown', () => (pressedMouse = true), true);
 window.addEventListener('keydown', () => (pressedMouse = false), true);
 onModalChange((open) => {
   if (open) {
+    setRemoteMode(false);
     telescope.exit();
     showWorkerShortcuts(false);
   }
@@ -4471,7 +4508,7 @@ function aimedAt(ndc: THREE.Vector2, slack = 0): { it: Interactable; near: boole
     }
     if (!shown) continue;
     if (!it || it.off) return null; // a wall, the floor, a plant… is in the way
-    return { it, near: hit.point.distanceTo(eye) <= REACH[it.kind] + slack, hit };
+    return { it, near: remoteMode ? remoteInteractionAllowed(it.kind) : hit.point.distanceTo(eye) <= REACH[it.kind] + slack, hit };
   }
   return null;
 }
@@ -4538,6 +4575,11 @@ player.onClick = (ndc) => {
   if (hanger.active) {
     reach();
     hanger.place(ndc);
+    return;
+  }
+  if (remoteMode) {
+    const aim = aimedAt(ndc);
+    if (aim?.near) use(aim.it, 'E', noteUnder(aim));
     return;
   }
   if (player.view === 'first') {
@@ -5133,8 +5175,14 @@ function frame(ts?: number) {
     hemi.intensity += strobe * 0.8;
   }
 
+  if (remoteMode && remoteBlocked()) setRemoteMode(false);
   aimedNote = null;
-  if (modalOpen() || telescope.active || hanger.active || climber.active || golf.active || thrower.active || driver.active) target = null;
+  if (remoteMode) {
+    const aim = firstPerson ? aimedAt(CROSSHAIR) : pointer ? aimedAt(pointer) : null;
+    target = aim?.near ? aim.it : null;
+    if (target) aimedNote = noteUnder(aim);
+  }
+  else if (modalOpen() || telescope.active || hanger.active || climber.active || golf.active || thrower.active || driver.active) target = null;
   else if (firstPerson) {
     const aim = aimedAt(CROSSHAIR);
     target = aim?.near ? aim.it : (throneTarget() ?? mySeat() ?? (inOffice() ? ballAtFeet() : null));

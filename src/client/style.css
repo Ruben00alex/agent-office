@@ -1593,3 +1593,11 @@ a.when:hover { text-decoration: underline; }
 @media (min-width: 961px) {
   .maintenance-chat:not(.product-chat) .maintenance-console::details-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 }
+
+/* Remote use is visible in both camera views; the normal target hint names the aimed object. */
+.remote-indicator {
+  position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+  padding: 8px 14px; border: 2px solid var(--accent); border-radius: 12px;
+  background: var(--paper); color: var(--ink); font-size: 13px; pointer-events: none;
+}
+.crosshair.remote { outline: 2px solid var(--accent); outline-offset: 5px; }

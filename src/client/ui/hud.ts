@@ -190,6 +190,7 @@ export function openHelp() {
     ['O', 'Open a pull request for a worker on its own branch, or see the one it has'],
     ['T', 'Chat'],
     ['/', 'Search the chat and every terminal on your floor, back to before the office last restarted'],
+    ['Ctrl+E', 'Remote interaction: aim at a visible tool or board and press E from any distance; Esc exits'],
     [IS_MAC ? '⌘K' : 'Ctrl+K', 'Command palette: type a few letters to find a worker, issue, PR, service, board, teammate or action. Enter opens it, Shift+Enter walks you over to it first'],
     ['V', 'Join voice. In voice, hold V to talk (push to talk): you’re muted once you let go. Leave voice from the ☰ menu'],
     ['M', 'Mute or unmute your mic in voice. ⚙️ Settings can have you join muted, for push to talk'],

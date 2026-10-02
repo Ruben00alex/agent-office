@@ -47,3 +47,14 @@ export function interactionAvailable(it: Interactable | null, key: DeskKey, stat
   if (it.kind === 'car') return it.car !== undefined;
   return true;
 }
+
+/** Remote use opens tools or triggers stationary actions; travel and physical activities stay local. */
+export function remoteInteractionAllowed(kind: Interactable['kind']): boolean {
+  return REMOTE_INTERACTIONS.has(kind);
+}
+
+const REMOTE_INTERACTIONS = new Set<Interactable['kind']>([
+  'desk', 'station', 'issues', 'pulls', 'services', 'queue', 'tv', 'maintenance',
+  'maintenanceIssues', 'ship', 'lever', 'whiteboard', 'meeting', 'bookshelf',
+  'jukebox', 'expand', 'herald', 'gong', 'dj',
+]);

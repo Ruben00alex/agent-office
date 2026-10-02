@@ -8,6 +8,7 @@ Back to the [README](../README.md).
 | Space | Jump (you can land on desks, couches and the cars in the garage); in a car, brake |
 | Mouse drag / wheel | Orbit / zoom the camera |
 | Right-click | Open the terminal of the worker at the desk or board-agent kiosk you point at, within reach |
+| Ctrl + E | Toggle remote interaction: aim at a visible tool or board, then E to use it from any distance; Esc exits |
 | E | Interact: hire a worker, open its terminal, read a board, take an issue's note off the board, prompt a board agent (the 🧭 Product Lead on the east wall opens a chat to talk the project through; the Maintenance agent in the closet changes the office itself, the laptop beside him answers questions about it, the big red button on its console opens the stack of his changes to ship, and the lever on the wall beside the door turns easy approvals on and off), call a meeting in the meeting room, draw on the whiteboard, read the docs at the bookshelf, watch the TV, sit down (or get up), ride the elevator, climb the ladder (or get off it), slide down a fire pole, grab a coffee, take a smoke break, tee off at the golf tee, pet the dog, pick up the basketball (then hold E and let go to shoot), order a drink at the rooftop bar, blow the DJ's air horn, step up to the dart board or the axe lane on the roof (then hold Space and let go to throw), get into one of the cars in the garage (behind the wheel, or beside whoever's driving) or out of it, knock through the north wall past the gong for 2 more desks (at the **🚧 Room to grow** sign). In the [castle](maps.md#the-castle): sit on the throne, where E is for whoever's first in line (or the Hand of the King, with nobody waiting), and speak to the Hand to send out a new worker |
 | K | On the castle's throne: speak to the Hand of the King, to send out a new worker |
 | P | Prompt: give a task to a new worker, or to the one at this desk |
@@ -49,3 +50,11 @@ The prompt edits the way it does in your own terminal (iTerm2's *Natural Text Ed
 | ⌘ + ← / → | Jump to the start / end of the line (Mac) |
 
 With **Settings → Experiments → Maintenance chat** enabled, the Maintenance counter and its WORKERS terminal shortcut open the rich chat view. Enter sends, Shift+Enter adds a line, and Esc or the top-right ✕ closes it and returns to the office. Use **+ New conversation** to start a separate issue once Maintenance finishes its current work, **Open terminal** for approvals, **Review stack** for stacked changes, and **Current conversation** to leave a read-only archived session. The experiment is local to your browser; archived conversation history is shared and kept on the office server.
+
+## Remote interaction
+
+**Ctrl+E** toggles remote interaction in the desktop 3D office. A banner and outlined crosshair show it is active; the usual target hint names the object you aim at. In third person, aim with the mouse. **E** or click uses it, and the mode exits after a successful action. Desk shortcuts and right-click terminal access also work remotely.
+
+Remote mode reaches visible desks/workers, board agents, issue/PR/service/queue boards, TV, Maintenance and its issue board, stack and approvals lever, whiteboard, meeting tools, bookshelf, jukebox, expansion sign, herald, gong and DJ booth. Walls and nearer geometry still block the ray; it cannot reach objects on another floor. Issue notes open for reading instead of being picked up. Carrying an issue card or basketball, climbing, driving, hanging pictures, sports, telescope use and floor travel prevent remote mode. Movement controls are unchanged; seats, elevator, ladder, poles and other physical activities keep their normal local interactions outside the mode.
+
+Press **Esc** or **Ctrl+E** again to exit. Opening a modal, focusing chat or a terminal/text field, or leaving the browser window clears the mode. The 2D phone view at **/lite** keeps its existing direct tap/tab access and has no remote toggle.
