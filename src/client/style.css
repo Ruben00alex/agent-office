@@ -1509,6 +1509,9 @@ a.when:hover { text-decoration: underline; }
 .maintenance-review-status { padding: 12px; background: #eef2ff; border-radius: 8px; font-size: 12px; overflow-wrap: anywhere; }
 .maintenance-working-files { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .maintenance-review-view .maintenance-diff { max-height: 500px; overflow: auto; font-size: 12px; }
+/* The Product Lead's chat: the Maintenance workspace's conversation without its console, work and review panes. */
+.modal.product-chat { width: min(980px, 100%); }
+.product-chat .maintenance-chat-layout { grid-template-columns: 240px minmax(0, 1fr); }
 @media (max-width: 1150px) {
   .maintenance-chat-layout { grid-template-columns: 180px minmax(0, 1fr); overflow-y: auto; }
   .maintenance-console-rail { grid-column: 1 / -1; min-height: 370px; border-left: 0; border-top: 1px solid #e7eaf0; }

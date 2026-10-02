@@ -20,6 +20,8 @@ export function transcriptMessage(row: any): { role: 'user' | 'assistant'; conte
   if (message.role === 'user') {
     // The first request is wrapped in the station brief; follow-ups carry the TV instructions.
     if (clean.startsWith("You're the Maintenance agent in Agent Office")) clean = clean.split('\n\nThe request:\n\n').at(-1) ?? clean;
+    // The Product Lead's brief likewise ends in its first message.
+    if (clean.startsWith("You're the Product Lead in Agent Office")) clean = clean.split('\n\nThe first message:\n\n').at(-1) ?? clean;
     const images = clean.indexOf('\n\n[Maintenance images]');
     if (images >= 0) clean = clean.slice(0, images);
     const tv = clean.indexOf('\n\nOffice TV:');
@@ -96,17 +98,17 @@ const validMessage = (m: any): m is MaintenanceChatMessage => m && typeof m.id =
 export class MaintenanceChatArchive {
   private file: string;
   private conversations: MaintenanceConversation[] = [];
-  constructor(dir: string) {
+  constructor(dir: string, name = 'maintenance-chat-archive.json', private fallbackTitle = 'Maintenance conversation') {
     mkdirSync(dir, { recursive: true });
-    this.file = path.join(dir, 'maintenance-chat-archive.json');
+    this.file = path.join(dir, name);
     try {
       const saved = JSON.parse(readFileSync(this.file, 'utf8'));
       if (Array.isArray(saved)) this.conversations = saved.filter(c => c && typeof c.id === 'string' && typeof c.title === 'string' && Number.isFinite(c.createdAt) && Number.isFinite(c.updatedAt) && Array.isArray(c.messages))
         .map(c => ({ ...c, messages: c.messages.filter(validMessage) }));
     } catch { /* First run or invalid saved history. */ }
   }
-  list() {
-    return [...this.conversations].sort((a, b) => b.updatedAt - a.updatedAt).map(({ messages, ...c }) => ({ ...c, count: messages.length }));
+  list(floor?: string) {
+    return this.conversations.filter(c => !floor || c.floor === floor).sort((a, b) => b.updatedAt - a.updatedAt).map(({ messages, ...c }) => ({ ...c, count: messages.length }));
   }
   page(id: string, before?: string) {
     const c = this.conversations.find(c => c.id === id);
@@ -116,10 +118,10 @@ export class MaintenanceChatArchive {
     const start = Math.max(0, end - 100);
     return { ...c, messages: c.messages.slice(start, end), hasOlder: start > 0 };
   }
-  capture(worker: WorkerInfo, incoming: MaintenanceChatMessage[]) {
+  capture(worker: WorkerInfo, incoming: MaintenanceChatMessage[], floor?: string) {
     if (!incoming.length) return;
     const old = this.conversations.find(c => c.id === worker.id);
-    const conversation: MaintenanceConversation = old ? { ...old, messages: [...old.messages] } : { id: worker.id, title: 'Maintenance conversation', createdAt: worker.createdAt, updatedAt: worker.createdAt, messages: [] };
+    const conversation: MaintenanceConversation = old ? { ...old, messages: [...old.messages] } : { id: worker.id, title: this.fallbackTitle, ...(floor ? { floor } : {}), createdAt: worker.createdAt, updatedAt: worker.createdAt, messages: [] };
     let changed = false;
     for (const raw of incoming.filter(validMessage)) {
       const message = raw.role === 'user' ? { ...raw, content: raw.content.split('\n\n[Maintenance images]')[0] } : raw;
@@ -134,7 +136,7 @@ export class MaintenanceChatArchive {
     }
     if (!changed) return;
     conversation.messages.sort((a, b) => a.at - b.at);
-    conversation.title = (conversation.messages.find(m => m.role === 'user')?.content ?? 'Maintenance conversation').replace(/\s+/g, ' ').slice(0, 100);
+    conversation.title = (conversation.messages.find(m => m.role === 'user')?.content ?? this.fallbackTitle).replace(/\s+/g, ' ').slice(0, 100);
     conversation.updatedAt = Math.max(conversation.updatedAt, ...incoming.map(m => m.at));
     const next = [...this.conversations.filter(c => c.id !== worker.id), conversation];
     writeFileSync(this.file + '.tmp', JSON.stringify(next), { mode: 0o600 });

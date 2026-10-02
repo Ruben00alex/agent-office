@@ -32,15 +32,6 @@ export type WorkerKind = 'agent' | 'shell';
  */
 export type WorkerAction = 'read' | 'edit' | 'test' | 'web' | 'failing';
 
-/** A desk worker's role besides writing code: the Product Lead talks the project through, brainstorms and answers questions. */
-export type WorkerRole = 'product-lead';
-export const WORKER_ROLES: Record<WorkerRole, { name: string; color: string }> = {
-  'product-lead': { name: 'Product Lead', color: '#e76f51' },
-};
-export function isWorkerRole(value: unknown): value is WorkerRole {
-  return value === 'product-lead';
-}
-
 export type AgentProvider = 'claude' | 'opencode' | 'codex' | 'grok' | 'muse' | 'dsh' | 'custom';
 
 export function isAgentProvider(value: unknown): value is AgentProvider {
@@ -115,6 +106,8 @@ export interface MaintenanceChatMessage {
 }
 export interface MaintenanceConversation {
   id: string;
+  /** The floor whose Product Lead had it (the Maintenance agent's belong to the whole office). */
+  floor?: string;
   title: string;
   createdAt: number;
   updatedAt: number;
@@ -204,8 +197,6 @@ export interface WorkerInfo {
   workingSince?: number;
   /** Sent out by a map's herald (the castle's Hand of the King), so every browser has it run to its seat from beside them. */
   via?: 'herald';
-  /** A desk worker hired for a role instead of coding (see WORKER_ROLES): it's told the role's brief ahead of its first message. */
-  role?: WorkerRole;
 }
 
 /** Where the branch of a worker whose worktree was deleted still is (see WorkerInfo.lost). */
@@ -1222,7 +1213,7 @@ export type ClientMsg =
   | { t: 'profile'; name: string; color: string; look: Look }
   /** With `issue`, the worker is there for that GitHub issue: it's assigned on GitHub (so it moves to In progress) and taken off the queue. */
   /** With `repos` (other floors' ids), the worker works in their repositories too, each in a worktree of its own (see WorkerInfo.repos). */
-  | { t: 'worker.spawn'; deskId: string; prompt?: string; worktree?: boolean; kind?: WorkerKind; provider?: AgentProvider; model?: string; effort?: AgentEffort; issue?: number; repos?: string[]; via?: 'herald'; role?: WorkerRole }
+  | { t: 'worker.spawn'; deskId: string; prompt?: string; worktree?: boolean; kind?: WorkerKind; provider?: AgentProvider; model?: string; effort?: AgentEffort; issue?: number; repos?: string[]; via?: 'herald' }
   | { t: 'worker.resume'; workerId: string }
   | { t: 'worker.kill'; workerId: string; cleanup?: WorktreeCleanup }
   /** Asks what the worker's worktree holds; answered with a `worker.worktree` message. */
@@ -1244,6 +1235,8 @@ export type ClientMsg =
    */
   | { t: 'station.prompt'; deskId: string; prompt: string; maintenanceIssue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort }
   | { t: 'maintenance.chat.send'; id: string; prompt: string; newConversation?: boolean; thread?: string; attachments?: string[]; maintenanceIssue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort }
+  /** A message in the chat with the Product Lead on this floor (a conversation partner, see PRODUCT_DESK); answered with a `product.chat.sent`. */
+  | { t: 'product.chat.send'; id: string; prompt: string; newConversation?: boolean; thread?: string; provider?: AgentProvider; model?: string; effort?: AgentEffort }
   /** A question for the maintenance closet's laptop (a small model that knows the office's source); `id` comes back on the `maintenance.answer`. */
   | { t: 'maintenance.ask'; id: string; question: string }
   /** The big button in the maintenance closet: commit what's stacked, check it, push, rebuild and restart the office. */
@@ -1480,6 +1473,7 @@ export type ServerMsg =
   | { t: 'approvals'; state: ApprovalsState }
   /** The laptop's answer to your `maintenance.ask`: what the model said, or why it couldn't, and which model it was. */
   | { t: 'maintenance.chat.sent'; id: string; workerId?: string; error?: string }
+  | { t: 'product.chat.sent'; id: string; workerId?: string; error?: string }
   | { t: 'maintenance.answer'; id: string; model: string; answer?: string; error?: string }
   | { t: 'screen'; workerId: string; cols: number; rows: number; lines: Record<number, Run[]>; full: boolean; cursor: [number, number] }
   | { t: 'term.snapshot'; workerId: string; data: string; cols: number; rows: number }

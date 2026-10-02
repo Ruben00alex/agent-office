@@ -10,8 +10,8 @@ import { clockWork, workedMs } from '../src/server/workers.js';
 import type { WorkerInfo } from '../src/shared/protocol.js';
 
 test('every built-in map places every seat the office has, by the same ids', () => {
-  // The maintenance closet is the office's own: a map has the board agents' kiosks, not that one.
-  const seats = new Set([...DESK_BY_ID.keys()].filter((id) => id !== 'station-maintenance'));
+  // The maintenance closet and the Product Lead's kiosk are the office's own: a map has the board agents' kiosks, not those.
+  const seats = new Set([...DESK_BY_ID.keys()].filter((id) => id !== 'station-maintenance' && id !== 'station-product'));
   for (const config of BUILTIN_MAPS) {
     const plan = planMap(config);
     assert.deepEqual(new Set(plan.byId.keys()), seats, `${config.id} has the office's seats`);

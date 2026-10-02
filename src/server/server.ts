@@ -35,8 +35,8 @@ import { RELAY_LOGIN, relayRequest, relayUpgrade, signInPage, stoppedPage, tunne
 import { ChatLog } from './history.js';
 import { Arcade, HighScores } from './cabinet.js';
 import type { ChatLine, ClientMsg, FloorInfo, FloorView, Me, MeetingRequest, PeerInfo, SearchResults, ServerMsg, ServicesState, SignInKind, WorkerInfo } from '../shared/protocol.js';
-import { GH_COMMENT_MAX, GH_LABEL_MAX, isAgentEffort, isAgentProvider, isWorkerRole, type AgentChoice } from '../shared/protocol.js';
-import { DESK_BY_ID, MAINTENANCE_DESK, elevatorSpot, nextFreeSeat, streetBelow } from '../shared/layout.js';
+import { GH_COMMENT_MAX, GH_LABEL_MAX, isAgentEffort, isAgentProvider, type AgentChoice } from '../shared/protocol.js';
+import { DESK_BY_ID, MAINTENANCE_DESK, PRODUCT_DESK, elevatorSpot, nextFreeSeat, streetBelow } from '../shared/layout.js';
 import { OFFICE_MAP, seatHereOn } from '../shared/maps/index.js';
 import { EMPTY_PLAN } from '../shared/floorplan.js';
 import { JUKEBOX_TUNES, STREAM } from '../shared/jukebox.js';
@@ -650,8 +650,8 @@ export async function startServer(cfg: Config) {
     cfg.maxWorkers,
     () => {
       let n = 0;
-      // The Maintenance agent looks after the office itself: he isn't one of the workers it's limited to.
-      for (const f of floors.values()) n += f.workers.list().filter((w) => w.deskId !== MAINTENANCE_DESK).length;
+      // The Maintenance agent looks after the office itself, and the Product Lead is there to chat: neither is one of the workers it's limited to.
+      for (const f of floors.values()) n += f.workers.list().filter((w) => w.deskId !== MAINTENANCE_DESK && w.deskId !== PRODUCT_DESK).length;
       return n;
     },
     (state) => broadcast({ t: 'machine', state }),
@@ -667,6 +667,7 @@ export async function startServer(cfg: Config) {
   };
 
   const maintenanceHistory = new MaintenanceChatArchive(cfg.dataDir);
+  const productHistory = new MaintenanceChatArchive(cfg.dataDir, 'product-chat-archive.json', 'Product Lead conversation');
   const maintenanceImages = new MaintenanceImages(cfg.dataDir);
   const issueAs = new Map<string, ReturnType<typeof signins.ghAs>>();
   const issueJobs = new IssueJobs(async (job) => {
@@ -691,9 +692,10 @@ export async function startServer(cfg: Config) {
   const maintenanceWork = new MaintenanceWork(cfg.dataDir);
   let maintenanceStarting = false;
   const floorContext: FloorContext = {
-    maintenanceConversation: (worker, messages) => {
-      try { maintenanceHistory.capture(worker, messages); }
-      catch (err) { console.warn('agent-office: could not archive Maintenance conversation:', (err as Error).message); }
+    maintenanceConversation: (worker, messages, floorId) => {
+      const product = worker.deskId === PRODUCT_DESK;
+      try { (product ? productHistory : maintenanceHistory).capture(worker, messages, product ? floorId : undefined); }
+      catch (err) { console.warn(`agent-office: could not archive ${product ? 'Product Lead' : 'Maintenance'} conversation:`, (err as Error).message); }
     },
     agentCmd: cfg.agentCmd,
     agentArgs: cfg.agentArgs,
@@ -1228,6 +1230,18 @@ export async function startServer(cfg: Config) {
           }
           return send(res, 200, { ok: true });
         } catch (err) { return send(res, 400, { error: (err as Error).message }); }
+      }
+      if (p === '/api/product/chat' && req.method === 'GET') {
+        // The Product Lead standing by on this floor, and the conversations this floor has had with one.
+        if (!floor) return send(res, 404, { error: 'No such floor' });
+        const agent = floor.workers.list().find((x) => x.deskId === PRODUCT_DESK);
+        const id = url.searchParams.get('thread') ?? agent?.id;
+        return send(res, 200, {
+          conversations: productHistory.list(floor.def.id),
+          conversation: id ? productHistory.page(id, url.searchParams.get('before') ?? undefined) : undefined,
+          worker: agent, floor: floor.def.id, floorName: floor.def.name,
+          richReplies: !agent || ['codex', 'claude', 'custom'].includes(agent.provider ?? ''),
+        });
       }
       if (p.startsWith('/api/maintenance/') && req.method === 'GET') {
         try {
@@ -1920,7 +1934,7 @@ export async function startServer(cfg: Config) {
         }
         // A shell is theirs too: `claude auth login` or `gh auth login` typed there signs them in.
         const hire = () => {
-          const r = floor.workers.spawn(str(msg.deskId, 32), who, str(msg.prompt, 20000) || undefined, msg.worktree === true, kind, msg.provider, model, effort, undefined, c.accountId, repos, msg.via === 'herald' ? 'herald' : undefined, isWorkerRole(msg.role) ? msg.role : undefined);
+          const r = floor.workers.spawn(str(msg.deskId, 32), who, str(msg.prompt, 20000) || undefined, msg.worktree === true, kind, msg.provider, model, effort, undefined, c.accountId, repos, msg.via === 'herald' ? 'herald' : undefined);
           const issue = kind === 'agent' ? issueNumber(msg.issue) : undefined;
           const across = repos.length ? ` across ${[floor.def.name, ...repos.map((x) => x.name)].join(' + ')}` : '';
           if (typeof r === 'string') warn(c, r);
@@ -2013,17 +2027,18 @@ export async function startServer(cfg: Config) {
         break;
       }
       case 'maintenance.chat.send':
+      case 'product.chat.send':
       case 'station.prompt': {
         const floor = here();
-        const chatId = msg.t === 'maintenance.chat.send' ? str(msg.id, 64) : undefined;
+        const chatId = msg.t === 'station.prompt' ? undefined : str(msg.id, 64);
         const reply = (error?: string, workerId?: string) => {
-          if (chatId) sendTo(c, { t: 'maintenance.chat.sent', id: chatId, error, workerId });
+          if (chatId) sendTo(c, msg.t === 'product.chat.send' ? { t: 'product.chat.sent', id: chatId, error, workerId } : { t: 'maintenance.chat.sent', id: chatId, error, workerId });
           else warn(c, error);
         };
         if (!floor) { reply('Take the elevator to a project floor first'); break; }
-        const deskId = msg.t === 'maintenance.chat.send' ? MAINTENANCE_DESK : str(msg.deskId, 32);
+        const deskId = msg.t === 'maintenance.chat.send' ? MAINTENANCE_DESK : msg.t === 'product.chat.send' ? PRODUCT_DESK : str(msg.deskId, 32);
         // Nobody there yet: whoever asks first hires it, on their own sign-ins.
-        const chat = msg.t === 'maintenance.chat.send' ? { newConversation: msg.newConversation === true, thread: str(msg.thread, 64) || undefined } : undefined;
+        const chat = msg.t !== 'station.prompt' ? { newConversation: msg.newConversation === true, thread: str(msg.thread, 64) || undefined } : undefined;
 
         // Not the office's default: hired on this, or moved onto it if it's on something else (see Workers.station).
         let pick: AgentChoice | undefined;
@@ -2036,7 +2051,7 @@ export async function startServer(cfg: Config) {
           pick = { provider: msg.provider, ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
         }
 
-        const maintenanceIssue = deskId === MAINTENANCE_DESK ? issueNumber(msg.maintenanceIssue) : undefined;
+        const maintenanceIssue = msg.t !== 'product.chat.send' && deskId === MAINTENANCE_DESK ? issueNumber(msg.maintenanceIssue) : undefined;
         const send = async () => {
           const maintenance = deskId === MAINTENANCE_DESK;
           if (maintenance && maintenanceStarting) { reply('Another Maintenance request is being started. Try again in a moment.'); return; }

@@ -1237,7 +1237,7 @@ function buildBeanbag(def: DeskDef, index: number): DeskView {
   return { def, group, laptopAnchor, seatAnchor, stage, chair: bag, vacancy, vacancyY };
 }
 
-const KIOSK_SIGN: Record<StationKind, string> = { issues: '📌 Ask me', pulls: '🔀 Ask me', queue: '📋 Ask me', maintenance: '🛠️ Ask me' };
+const KIOSK_SIGN: Record<StationKind, string> = { issues: '📌 Ask me', pulls: '🔀 Ask me', queue: '📋 Ask me', maintenance: '🛠️ Ask me', product: '🧭 Let’s talk' };
 
 /**
  * A board agent's kiosk: a little counter in its color with a sign on the front, and the agent standing
@@ -1433,21 +1433,22 @@ export function buildOffice(): Office {
     const view = buildKiosk(def);
     group.add(view.group);
     desks.set(def.id, view);
-    // The kiosk and the agent behind it, back to the wall (they all stand by the north wall) so
-    // nobody squeezes in behind, and up over the agent's head so nobody hops on it.
+    // The kiosk and the agent behind it, back to the wall so nobody squeezes in behind, and up over
+    // the agent's head so nobody hops on it.
     const corners = [-1, 1].flatMap((t) => [-KIOSK.depth / 2, KIOSK.stand + 0.35].map((sz) => deskPoint(def, (t * KIOSK.width) / 2, sz)));
     const xs = corners.map(([x]) => x);
     const zs = corners.map(([, z]) => z);
-    // The maintenance agent stands with his back to the west wall, the rest to the north one.
-    const west = def.station === 'maintenance';
-    colliders.push({ minX: west ? FLOOR.minX : Math.min(...xs), maxX: Math.max(...xs), minZ: west ? Math.min(...zs) : FLOOR.minZ, maxZ: Math.max(...zs), top: 1.5, fence: true });
+    // The maintenance agent stands with his back to the west wall, the Product Lead to the east one, the rest to the north one.
+    const wall = def.station === 'maintenance' ? 'west' : def.station === 'product' ? 'east' : 'north';
+    colliders.push({ minX: wall === 'west' ? FLOOR.minX : Math.min(...xs), maxX: wall === 'east' ? FLOOR.maxX : Math.max(...xs), minZ: wall === 'north' ? FLOOR.minZ : Math.min(...zs), maxZ: Math.max(...zs), top: 1.5, fence: true });
     // Walk up to its front.
     const [fx, fz] = deskPoint(def, 0, -1);
     const it: Interactable = { kind: 'station', deskId: def.id, x: fx, z: fz, radius: 1.3 };
     interactables.push(it);
     view.group.userData.interact = it;
     // The agent, its name tag and the card over its head, up against the wall.
-    if (!west) fixture('north', def.x, 1.45, 1.4, 2.9);
+    if (wall === 'north') fixture('north', def.x, 1.45, 1.4, 2.9);
+    else if (wall === 'east') fixture('east', def.z, 1.45, 1.4, 2.9);
   }
   // The closet he works in, where the west wall's third window was.
   const closet = buildMaintenanceCloset(group, colliders, interactables, looks, fixture);

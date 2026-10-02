@@ -1,4 +1,4 @@
-import type { AgentChoice, AgentEffort, AgentProvider, WorkerRole, LostBranch, ServerMsg, WorktreeCleanup, WorktreeState } from '../../shared/protocol';
+import type { AgentChoice, AgentEffort, AgentProvider, LostBranch, ServerMsg, WorktreeCleanup, WorktreeState } from '../../shared/protocol';
 import { h, openModal } from './dom';
 import { store } from '../state';
 import { providerPicker, type WorkerPicker } from './provider';
@@ -17,8 +17,6 @@ export interface PromptOptions {
   worktreeOption?: boolean;
   /** Offer the configured agent provider choice (only when hiring a new worker). */
   providerOption?: boolean;
-  /** Offer hiring the worker as the Product Lead (only when hiring a new worker). */
-  roleOption?: boolean;
   /** Label for the provider choice, when it isn't a new "Worker". */
   providerLabel?: string;
   /** What the agent being prompted already runs on, shown in place of the office's default. */
@@ -26,7 +24,7 @@ export interface PromptOptions {
   /** Other floors' projects a new worker in its own worktree can work in too (see WorkerInfo.repos). */
   repoOptions?: { id: string; name: string }[];
   /** `picked` is whether the provider, model and effort were chosen here instead of left on the office's default. */
-  onSubmit(text: string, opts: { worktree: boolean; provider?: AgentProvider; model?: string; effort?: AgentEffort; repos: string[]; picked?: boolean; role?: WorkerRole }): void;
+  onSubmit(text: string, opts: { worktree: boolean; provider?: AgentProvider; model?: string; effort?: AgentEffort; repos: string[]; picked?: boolean }): void;
 }
 
 const WT_KEY = 'agent-office.worktree';
@@ -72,15 +70,6 @@ export function openPrompt(opts: PromptOptions) {
         '🌿 Work in its own git worktree & branch',
     )
     : null;
-  const roleBox = h('input', { type: 'checkbox', id: 'role-toggle' }) as HTMLInputElement;
-  const roleRow = opts.roleOption
-    ? h(
-        'label',
-        { for: 'role-toggle', style: 'display:flex;gap:8px;align-items:center;margin:10px 0 0;font-weight:700;cursor:pointer', title: 'A Product Lead is someone to talk the project through with: think out loud, brainstorm, ask about the code and docs. It files GitHub issues only if you ask; it does not write code' },
-        roleBox,
-        '🧭 Hire as Product Lead (talk it through, brainstorm)',
-      )
-    : null;
   const repos = repoPicker(opts.worktreeOption ? opts.repoOptions : undefined, wtBox);
   const provider: WorkerPicker | null = opts.providerOption ? providerPicker(store.project, 'prompt-provider', opts.providerLabel, opts.providerCurrent && (() => opts.providerCurrent)) : null;
   const submit = h('button.btn.primary', { type: 'submit' }, opts.submitLabel ?? 'Send ✨');
@@ -89,7 +78,7 @@ export function openPrompt(opts: PromptOptions) {
     'form.modal',
     { role: 'dialog', 'aria-label': opts.title },
     h('header', {}, h('h2', {}, opts.title)),
-    h('div.body', {}, opts.warning ? h('p.setting-note.bad', { style: 'margin:0 0 10px', role: 'alert' }, opts.warning) : null, opts.subtitle ? h('p', { style: 'margin:0 0 10px;font-weight:700;color:var(--muted)' }, opts.subtitle) : null, ta, provider?.element ?? null, roleRow, wtRow, repos.element),
+    h('div.body', {}, opts.warning ? h('p.setting-note.bad', { style: 'margin:0 0 10px', role: 'alert' }, opts.warning) : null, opts.subtitle ? h('p', { style: 'margin:0 0 10px;font-weight:700;color:var(--muted)' }, opts.subtitle) : null, ta, provider?.element ?? null, wtRow, repos.element),
     h('footer', {}, h('span.grow', {}, 'Enter to send · Shift+Enter for a new line'), cancel, submit),
   ) as HTMLFormElement;
   form.noValidate = true;
@@ -111,9 +100,8 @@ export function openPrompt(opts: PromptOptions) {
         // storage blocked
       }
     }
-    const role: WorkerRole | undefined = opts.roleOption && roleBox.checked ? 'product-lead' : undefined;
-    const worktree = !!opts.worktreeOption && wtBox.checked && !role;
-    opts.onSubmit(text, { worktree, provider: provider?.value(), model: provider?.model(), effort: provider?.effort(), repos: worktree ? repos.value() : [], picked: provider?.edited(), role });
+    const worktree = !!opts.worktreeOption && wtBox.checked;
+    opts.onSubmit(text, { worktree, provider: provider?.value(), model: provider?.model(), effort: provider?.effort(), repos: worktree ? repos.value() : [], picked: provider?.edited() });
   };
   form.addEventListener('submit', (e) => {
     e.preventDefault();

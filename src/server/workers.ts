@@ -10,12 +10,12 @@ import type { MaintenanceChatMessage } from '../shared/protocol.js';
 import { CodexUsageReader } from './codex-usage.js';
 import headless from '@xterm/headless';
 import serialize from '@xterm/addon-serialize';
-import type { AgentChoice, AgentEffort, AgentProvider, WorkerRole, Run, TerminalHit, WorkerInfo, WorkerKind, WorkerRepo, WorkerStatus, WorkerTask } from '../shared/protocol.js';
+import type { AgentChoice, AgentEffort, AgentProvider, Run, TerminalHit, WorkerInfo, WorkerKind, WorkerRepo, WorkerStatus, WorkerTask } from '../shared/protocol.js';
 import { FAILS_TO_DESPAIR, outputFailed, toolAction } from '../shared/actions.js';
-import { FLAG_BOLD, FLAG_DIM, FLAG_INVERSE, RGB_FLAG, WORKER_ROLES, isAgentEffort, isClaudeModel, isWorkerRole } from '../shared/protocol.js';
+import { FLAG_BOLD, FLAG_DIM, FLAG_INVERSE, RGB_FLAG, isAgentEffort, isClaudeModel } from '../shared/protocol.js';
 import { WORKSPACE_FILES, WORKTREES_DIR, Worktrees, describeWork, workspaceOf, type WorktreeCleanup, type WorktreeRef, type WorktreeState } from './worktrees.js';
 import { normalizeRepo } from '../shared/floors.js';
-import { DESK_BY_ID, MAINTENANCE_DESK, STATION_AGENT, deskBuilt } from '../shared/layout.js';
+import { DESK_BY_ID, MAINTENANCE_DESK, PRODUCT_DESK, STATION_AGENT, deskBuilt } from '../shared/layout.js';
 import { QUEUE_AGENT_DISALLOWED_TOOLS, stationBrief } from './stations.js';
 import { officePrompt, type PromptSource } from './prompts.js';
 import { isBusy } from '../shared/status.js';
@@ -216,14 +216,14 @@ export interface WorkerEvents {
   toast(text: string, level: 'info' | 'warn' | 'error'): void;
 }
 
+/** The two station agents whose conversation the office shows as a chat (see server/maintenance-chat.ts). */
+const isChatDesk = (deskId: string) => deskId === MAINTENANCE_DESK || deskId === PRODUCT_DESK;
+
 /** The Office TV brief goes only to desk workers, not to station agents (maintenance and the board agents). */
 function tvBrief(info: WorkerInfo): string {
   if (info.kind !== 'agent' || DESK_BY_ID.get(info.deskId)?.station) return '';
   return '\n\n' + presentationBrief(info.id);
 }
-
-/** The prompt each role is told (shared/prompts.ts). */
-const ROLE_PROMPT = { 'product-lead': 'role.productLead' } as const;
 
 export class WorkerManager {
   private workers = new Map<string, Worker>();
@@ -408,7 +408,7 @@ export class WorkerManager {
    * (see meetings.ts), in the meeting's own worktree, which everyone at the table shares. `repos` are
    * other floors' repositories a worker in its own worktree works in too (see makeWorkspace).
    */
-  spawn(deskId: string, by: string, prompt?: string, worktree = false, kind: WorkerKind = 'agent', provider?: AgentProvider, model?: string, effort?: AgentEffort, meeting?: { id: string; worktree?: WorkerInfo['worktree'] }, owner?: string, repos: RepoSource[] = [], via?: 'herald', role?: WorkerRole): WorkerInfo | string {
+  spawn(deskId: string, by: string, prompt?: string, worktree = false, kind: WorkerKind = 'agent', provider?: AgentProvider, model?: string, effort?: AgentEffort, meeting?: { id: string; worktree?: WorkerInfo['worktree'] }, owner?: string, repos: RepoSource[] = [], via?: 'herald'): WorkerInfo | string {
     // Nobody picked (a board agent, say): the office's default worker, model and effort included.
     if (kind === 'agent' && provider === undefined) ({ provider, model, effort } = this.officeDefault);
     const selectedProvider = kind === 'agent' ? provider : undefined;
@@ -421,7 +421,6 @@ export class WorkerManager {
     if (!deskBuilt(seat, this.wing())) return `${seat.label} isn't built yet: expand the back office first`;
     if (this.deskOccupied(deskId)) return seat.station ? `The ${STATION_AGENT[seat.station].name} is already there` : `That ${seat.beanbag ? 'bean bag' : 'desk'} is taken`;
     if (kind === 'shell' && seat.station) return 'A board agent is always an agent, not a shell';
-    if (role && (kind !== 'agent' || seat.station || meeting)) return `A ${WORKER_ROLES[role].name} is an agent at a regular desk`;
     if (seat.station && !prompt?.trim()) return 'Tell the board agent what to do';
     if (!seat.room !== !meeting) return seat.room ? 'Only a meeting seats workers at the meeting table: call one in the meeting room' : 'A meeting seats its workers at the meeting table';
     if (meeting && (kind !== 'agent' || worktree)) return 'A meeting seats agents, in its own worktree';
@@ -435,12 +434,11 @@ export class WorkerManager {
     }
     if (owner && selectedProvider === 'claude' && this.runAs && !this.runAs.claudeReady(owner)) return this.runAs.why('claude');
     // The Maintenance agent looks after the office itself: the worker limit isn't his.
-    const full = seat.id === MAINTENANCE_DESK ? undefined : this.capacity?.full();
+    const full = seat.id === MAINTENANCE_DESK || seat.id === PRODUCT_DESK ? undefined : this.capacity?.full();
     if (full) return full;
     const used = new Set([...this.workers.values()].map((w) => w.info.name.replace(/ 🐚$/, '')));
     const agent = seat.station && STATION_AGENT[seat.station];
-    const roleName = role && (used.has(WORKER_ROLES[role].name) ? `${WORKER_ROLES[role].name} ${[...Array(99).keys()].map((i) => i + 2).find((i) => !used.has(`${WORKER_ROLES[role].name} ${i}`))}` : WORKER_ROLES[role].name);
-    const name = agent ? agent.name : (roleName ?? NAMES.find((n) => !used.has(n)) ?? `Worker ${this.workers.size + 1}`);
+    const name = agent ? agent.name : (NAMES.find((n) => !used.has(n)) ?? `Worker ${this.workers.size + 1}`);
     const id = randomBytes(6).toString('hex');
     let wt: WorkerInfo['worktree'] = meeting?.worktree;
     let others: WorkerRepo[] | undefined;
@@ -465,13 +463,12 @@ export class WorkerManager {
       effort: selectedProvider === 'claude' || selectedProvider === 'grok' || selectedProvider === 'muse' || selectedProvider === 'dsh' ? effort : undefined,
       deskId,
       name: kind === 'shell' ? `${name} 🐚` : name,
-      color: kind === 'shell' ? '#8d99ae' : agent ? agent.color : role ? WORKER_ROLES[role].color : COLORS[Math.floor(Math.random() * COLORS.length)],
+      color: kind === 'shell' ? '#8d99ae' : agent ? agent.color : COLORS[Math.floor(Math.random() * COLORS.length)],
       status: 'starting',
       acked: true,
       createdBy: by,
       createdAt: Date.now(),
       ...(via ? { via } : {}),
-      ...(role ? { role } : {}),
       prompt: kind === 'shell' ? undefined : prompt?.trim() || undefined,
       worktree: wt,
       repos: others,
@@ -487,7 +484,7 @@ export class WorkerManager {
     this.workers.set(id, w);
     if (info.prompt) this.notePrompt(w, info.prompt);
     // A board agent is told what it's there for ahead of its first request (which is what shows).
-    this.launch(w, seat.station && info.prompt ? `${stationBrief(seat.station, this.prompts)}\n\n${info.prompt}` : role ? this.roleFirst(role, info.prompt) : info.prompt, undefined);
+    this.launch(w, seat.station && info.prompt ? `${stationBrief(seat.station, this.prompts)}\n\n${info.prompt}` : info.prompt, undefined);
     this.persist();
     return info;
   }
@@ -559,12 +556,6 @@ export class WorkerManager {
     for (const file of WORKSPACE_FILES) writeFileSync(path.join(this.dir, path.dirname(primary.path), file), `${brief.trim()}\n`);
   }
 
-  /** A role's brief ahead of the first message; with none yet, the brief alone, which has the worker wait for one. */
-  private roleFirst(role: WorkerRole, prompt?: string): string {
-    const brief = officePrompt(this.prompts, ROLE_PROMPT[role]);
-    return prompt ? `${brief}\n\nThe first message:\n${prompt}` : `${brief}\n\nNo one has written to you yet: say hello in a line, then wait for the first message.`;
-  }
-
   /** Starts a worker that isn't running again, carrying on its session, with `prompt` as its next message. */
   resume(id: string, prompt?: string): string | undefined {
     const w = this.workers.get(id);
@@ -576,7 +567,7 @@ export class WorkerManager {
     w.info.exitCode = undefined;
     const station = DESK_BY_ID.get(w.info.deskId)?.station;
     // A board agent with no session to carry on starts over, so it needs telling what it's for again.
-    const first = prompt && station && !w.info.sessionId ? `${stationBrief(station, this.prompts)}\n\n${prompt}` : w.info.role && !w.info.sessionId ? this.roleFirst(w.info.role, prompt) : prompt;
+    const first = prompt && station && !w.info.sessionId ? `${stationBrief(station, this.prompts)}\n\n${prompt}` : prompt;
     if (prompt) {
       w.info.activity = truncate(prompt, 80);
       this.notePrompt(w, prompt);
@@ -601,12 +592,13 @@ export class WorkerManager {
     const clean = text.replace(/\r\n?/g, '\n').trim();
     if (!clean) return 'Empty prompt';
     let w = [...this.workers.values()].find((x) => x.info.deskId === deskId);
-    if (chat && deskId === 'station-maintenance') {
-      if (chat.thread && chat.thread !== w?.info.id) return 'This conversation is archived. Start a new conversation for another issue.';
+    if (chat && (deskId === MAINTENANCE_DESK || deskId === PRODUCT_DESK)) {
+      const product = deskId === PRODUCT_DESK;
+      if (chat.thread && chat.thread !== w?.info.id) return product ? 'This conversation is archived. Start a new conversation to talk about something else.' : 'This conversation is archived. Start a new conversation for another issue.';
       if (chat.newConversation && w) {
-        if (!['idle', 'done', 'exited'].includes(w.info.status)) return 'Maintenance is still busy. Wait for the current issue to finish before starting a new conversation.';
+        if (!['idle', 'done', 'exited'].includes(w.info.status)) return product ? 'The Product Lead is still replying. Wait a moment before starting a new conversation.' : 'Maintenance is still busy. Wait for the current issue to finish before starting a new conversation.';
         // Station workers share the stack directory and never own a disposable worktree.
-        if (w.info.worktree) return 'Cannot replace a Maintenance worker with a private worktree';
+        if (w.info.worktree) return 'Cannot replace a station worker with a private worktree';
         void this.kill(w.info.id);
         w = undefined;
       }
@@ -619,7 +611,7 @@ export class WorkerManager {
     }
     if (!w) {
       const info = this.spawn(deskId, by, clean, false, 'agent', pick?.provider, pick?.model, pick?.effort, undefined, owner);
-      if (typeof info !== 'string' && deskId === 'station-maintenance') this.events.conversation?.(info, [{ id: randomUUID(), role: 'user', content: clean, at: Date.now(), by, pending: true }]);
+      if (typeof info !== 'string' && isChatDesk(deskId)) this.events.conversation?.(info, [{ id: randomUUID(), role: 'user', content: clean, at: Date.now(), by, pending: true }]);
       return typeof info === 'string' ? info : { info, hired: true };
     }
     // Typed into the question it's asking, the prompt would answer it.
@@ -628,7 +620,7 @@ export class WorkerManager {
     if (!running) w.info.lastInput = { by, at: Date.now() };
     const err = running ? this.prompt(w.info.id, clean, by) : this.resume(w.info.id, clean);
     if (!err && !running) this.recordMaintenanceRequest(w, clean, by);
-    if (!err && running && deskId === 'station-maintenance' && ['idle', 'done'].includes(w.info.status)) this.setStatus(w, 'working');
+    if (!err && running && isChatDesk(deskId) && ['idle', 'done'].includes(w.info.status)) this.setStatus(w, 'working');
     return err ?? { info: w.info, hired: false };
   }
 
@@ -1693,8 +1685,8 @@ export class WorkerManager {
       // The easy approvals lever (see approvals.ts): Claude Code's automatic permission mode.
       args.push(...approvalArgs('claude', easyApprovals.on, args));
       // The queue agent only ever adds to the queue: without these it can't touch the checkout's files.
-      // The Product Lead likewise only talks (and files issues if asked).
-      if (station === 'queue' || info.role) args.push('--disallowedTools', ...QUEUE_AGENT_DISALLOWED_TOOLS);
+      // Likewise the Product Lead, who only talks.
+      if (station === 'queue' || station === 'product') args.push('--disallowedTools', ...QUEUE_AGENT_DISALLOWED_TOOLS);
       if (resumeSessionId) args.push('--resume', resumeSessionId);
       // `--` so a prompt like "- fix login" is never parsed as a CLI option.
       if (prompt) args.push('--', prompt);
@@ -2094,12 +2086,12 @@ export class WorkerManager {
 
   /** Picks up what the session logged since last time and books the difference. */
   private recordMaintenanceRequest(w: Worker, content: string, by?: string) {
-    if (w.info.deskId !== 'station-maintenance') return;
+    if (!isChatDesk(w.info.deskId)) return;
     this.events.conversation?.(w.info, [{ id: randomUUID(), role: 'user', content, at: Date.now(), by, pending: true }]);
   }
 
   private scanMaintenanceChat(w: Worker) {
-    if (w.info.deskId !== 'station-maintenance' || !w.info.sessionId || !this.events.conversation) return;
+    if (!isChatDesk(w.info.deskId) || !w.info.sessionId || !this.events.conversation) return;
     const provider = w.info.provider;
     const file = provider === 'codex' ? w.codexTranscript : (provider === 'claude' || provider === 'custom') ? w.tracker.transcript : undefined;
     if (!file) return;
@@ -2410,7 +2402,6 @@ process.stdin.on('end', () => {
           provider,
           model: provider === 'opencode' && isValidOpenCodeModel(s.model) ? s.model : provider === 'claude' && isClaudeModel(s.model) ? s.model : provider === 'grok' && isValidGrokModel(s.model) ? s.model : provider === 'muse' && isValidMuseModel(s.model) ? s.model : provider === 'dsh' && isValidDshModel(s.model) ? s.model : undefined,
           effort: (provider === 'claude' || provider === 'grok' || provider === 'muse' || provider === 'dsh') && isAgentEffort(s.effort) ? s.effort : undefined,
-          ...(isWorkerRole(s.role) && s.kind !== 'shell' ? { role: s.role } : {}),
           deskId: s.deskId,
           name: s.name ?? 'Worker',
           color: s.color ?? COLORS[0],

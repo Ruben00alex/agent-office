@@ -2,11 +2,11 @@ import './style.css';
 import * as THREE from 'three';
 import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js';
 import { sameLook } from '../shared/avatar';
-import { BALCONY, DESK_BY_ID, DESKS, ELEVATOR, ELEVATOR_CAR, FLOOR, GOLF_HOLE, LADDER, MAINTENANCE_DESK, POLE, POLES, SLAB, STATION_AGENT, STOREY, WALL_HEIGHT, WALL_T, WING, WING_DESKS, beanbagsOut, deskBuilt, deskSeat, inElevator, inWing, roofDrop, seatPlace, streetBelow, vacantSeats, wingMinZ, wingRowZ, type DeskDef, type SeatDef, type SeatPlace, type StationKind } from '../shared/layout';
+import { BALCONY, DESK_BY_ID, DESKS, ELEVATOR, ELEVATOR_CAR, FLOOR, GOLF_HOLE, LADDER, MAINTENANCE_DESK, PRODUCT_DESK, POLE, POLES, SLAB, STATION_AGENT, STOREY, WALL_HEIGHT, WALL_T, WING, WING_DESKS, beanbagsOut, deskBuilt, deskSeat, inElevator, inWing, roofDrop, seatPlace, streetBelow, vacantSeats, wingMinZ, wingRowZ, type DeskDef, type SeatDef, type SeatPlace, type StationKind } from '../shared/layout';
 import { OFFICE_PLAN, seatOn, type MapPlan } from '../shared/maps';
 import { canLabel } from '../shared/floorplan';
 import { floorPalette } from '../shared/floors';
-import type { AgentEffort, AgentProvider, CarriedIssue, FloorInfo, GhIssue, GongWhy, PeerInfo, WorkerInfo, WorkerRole, WorkerTask } from '../shared/protocol';
+import type { AgentEffort, AgentProvider, CarriedIssue, FloorInfo, GhIssue, GongWhy, PeerInfo, WorkerInfo, WorkerTask } from '../shared/protocol';
 import { MEETING_PATTERNS, meetingStage } from '../shared/meetings';
 import { isAsleep, isBusy, workerPr } from '../shared/status';
 import { Net } from './net';
@@ -63,6 +63,7 @@ import { issuePrompt, openBoard } from './ui/boards';
 import { openIssue, openPull, routePullMessage } from './ui/pull';
 import { openMaintenanceBoard, openMaintenanceIssue } from './ui/maintenance-board';
 import { openMaintenanceChat, onMaintenanceChatSent } from './ui/maintenance-chat';
+import { openProductChat, onProductChatSent } from './ui/product-chat';
 import { onMaintenanceAnswer, openLaptop, openStack, type MaintenanceActions } from './ui/maintenance';
 import { openAsk } from './ui/ask';
 import { openTeam, routeTeamMessage } from './ui/team';
@@ -188,6 +189,7 @@ const STATION_INFO: Record<StationKind, { icon: string; offer: string; does: str
   issues: { icon: '📌', offer: 'Ask me about issues', does: 'I file, find, triage, label and close them', example: 'File an issue: the dog walks straight through the jukebox' },
   pulls: { icon: '🔀', offer: 'Ask me about PRs', does: 'I sum up, review, comment on and merge them', example: 'Review the newest PR and tell me if it’s ready to merge' },
   queue: { icon: '📋', offer: 'Ask me to queue work', does: 'I turn it into tasks for fresh workers', example: 'Queue every open bug issue, most important first' },
+  product: { icon: '🧭', offer: 'Talk the project through', does: 'I’m here to think out loud, brainstorm and answer questions about it', example: 'What would make the office better for a team of ten?' },
   maintenance: { icon: '🛠️', offer: 'Ask me to change the office', does: 'I work on Agent Office itself and stack changes for you to review', example: 'Add a screen where workers can send artifacts that show their progress' },
 };
 /** A board agent waiting by its board before anyone has asked it anything (see buildKiosk), and where. */
@@ -1188,6 +1190,9 @@ net.onMessage((msg) => {
       break;
     case 'worker.worktree':
       routeWorktreeMessage(msg);
+      break;
+    case 'product.chat.sent':
+      onProductChatSent(msg);
       break;
     case 'maintenance.chat.sent':
       onMaintenanceChatSent(msg);
@@ -2329,8 +2334,8 @@ function officeIsFull(): boolean {
   return true;
 }
 
-function hire(deskId: string, prompt?: string, worktree = false, provider?: AgentProvider, model?: string, effort?: AgentEffort, issue?: number, repos?: string[], via?: 'herald', role?: WorkerRole) {
-  net.send({ t: 'worker.spawn', deskId, prompt, worktree, provider, model, effort, issue, repos: repos?.length ? repos : undefined, via, role });
+function hire(deskId: string, prompt?: string, worktree = false, provider?: AgentProvider, model?: string, effort?: AgentEffort, issue?: number, repos?: string[], via?: 'herald') {
+  net.send({ t: 'worker.spawn', deskId, prompt, worktree, provider, model, effort, issue, repos: repos?.length ? repos : undefined, via });
   // The moment notifications start to matter: ask once (it has to come from a key press or click).
   if (settings.notify && notifyPermission() === 'default' && !askedToNotify) {
     askedToNotify = true;
@@ -2361,8 +2366,7 @@ function promptAtDesk(deskId: string) {
       providerOption: true,
       worktreeOption: !!store.project?.branch,
       repoOptions: repoChoices(),
-      roleOption: true,
-      onSubmit: (text, o) => hire(deskId, text, o.worktree, o.provider, o.model, o.effort, undefined, o.repos, undefined, o.role),
+      onSubmit: (text, o) => hire(deskId, text, o.worktree, o.provider, o.model, o.effort, undefined, o.repos),
     });
   } else if (w.lost) {
     fixLostWorktree(w);
@@ -2398,14 +2402,14 @@ function hireAtDesk(deskId: string) {
     providerOption: true,
     worktreeOption: !!store.project?.branch,
     repoOptions: repoChoices(),
-    roleOption: true,
-    onSubmit: (text, o) => hire(deskId, text || undefined, o.worktree, o.provider, o.model, o.effort, undefined, o.repos, undefined, o.role),
+    onSubmit: (text, o) => hire(deskId, text || undefined, o.worktree, o.provider, o.model, o.effort, undefined, o.repos),
   });
 }
 
 function killWorker(id: string) {
   const w = store.workers.get(id);
   if (!w) return;
+  if (w.deskId === PRODUCT_DESK) return void openProductConversation(true);
   if (w.deskId === MAINTENANCE_DESK) {
     if (settings.maintenanceChat) return void openMaintenanceConversation(undefined, true);
     confirmDialog('End Maintenance session?',
@@ -2476,9 +2480,15 @@ function openMaintenanceConversation(context?: string, startNew = false): Return
     () => openStack((message) => net.send(message), maintenanceActions()), context, startNew);
 }
 
+/** The Product Lead's chat: for talking the project through, so it has no terminal-first flow. */
+function openProductConversation(startNew = false) {
+  return openProductChat((message) => net.send(message), (worker) => openWorkerTerminal(worker.id, undefined, true), startNew);
+}
+
 function askStation(deskId: string) {
   const kind = plan().byId.get(deskId)?.station;
   if (!kind) return;
+  if (kind === 'product') return void openProductConversation();
   if (kind === 'maintenance' && settings.maintenanceChat) return void openMaintenanceConversation();
   if (kind === 'maintenance') return void openStack((msg) => net.send(msg), maintenanceActions());
   const w = store.workerAtDesk(deskId);
@@ -2723,6 +2733,7 @@ function pointToWaiting(now: number) {
 function openWorkerTerminal(id: string, find?: TerminalFind, rawTerminal = false) {
   const w = store.workers.get(id);
   if (!w) return;
+  if (w.deskId === PRODUCT_DESK && !find && !rawTerminal) return void openProductConversation();
   if (settings.maintenanceChat && w.deskId === MAINTENANCE_DESK && !find && !rawTerminal) return void openMaintenanceConversation();
   if (w.lost) return fixLostWorktree(w);
   if (isAsleep(w.status)) resumeWorker(w);
@@ -4034,13 +4045,13 @@ function stationHint(deskId: string): Hint {
   const info = STATION_INFO[kind];
   if (!w) {
     const m = store.machine;
-    const full = kind !== 'maintenance' && officeFull(m);
+    const full = kind !== 'maintenance' && kind !== 'product' && officeFull(m);
     return {
       k: `${full}|${m.workers}|${m.limit}|${settings.maintenanceChat}`,
       parts: [
         h('span.title', {}, `${info.icon} ${STATION_AGENT[kind].name}`),
         aside(info.offer.replace(/^Ask me /, '')),
-        full ? h('span.cost', {}, `🚫 Office full · ${m.workers} of ${m.limit} workers`) : key('E', kind === 'maintenance' ? settings.maintenanceChat ? 'Workspace' : 'Review / request' : 'Prompt'),
+        full ? h('span.cost', {}, `🚫 Office full · ${m.workers} of ${m.limit} workers`) : key('E', kind === 'product' ? 'Chat' : kind === 'maintenance' ? settings.maintenanceChat ? 'Workspace' : 'Review / request' : 'Prompt'),
       ],
     };
   }
@@ -4053,9 +4064,9 @@ function stationHint(deskId: string): Hint {
       h('span.title', {}, `${info.icon} ${w.name} · ${STATUS_LABEL[w.status]}`),
       doing ? aside(doing) : '',
       spent ? h('span.cost', { title: usageTitle(w.usage!, provider) }, spent) : '',
-      key('E', kind === 'maintenance' ? settings.maintenanceChat ? 'Workspace' : 'Review / correct' : isAsleep(w.status) ? 'Wake with a prompt' : 'Prompt'),
+      key('E', kind === 'product' ? 'Chat' : kind === 'maintenance' ? settings.maintenanceChat ? 'Workspace' : 'Review / correct' : isAsleep(w.status) ? 'Wake with a prompt' : 'Prompt'),
       key('Right-click', 'Terminal'),
-      key('X', kind === 'maintenance' ? settings.maintenanceChat ? 'New conversation' : 'End session' : 'Send home'),
+      key('X', kind === 'product' ? 'New conversation' : kind === 'maintenance' ? settings.maintenanceChat ? 'New conversation' : 'End session' : 'Send home'),
     ],
   };
 }
