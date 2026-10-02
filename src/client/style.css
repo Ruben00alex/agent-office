@@ -1544,7 +1544,7 @@ a.when:hover { text-decoration: underline; }
   .maintenance-chat-composer { padding: 12px; }
   .maintenance-chat .maintenance-console-answer input { width: 0; }
 }
-.maintenance-rail-stack { display: grid; gap: 6px; flex: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e7eaf0; font-size: 12px; }
+.maintenance-rail-stack { display: grid; gap: 6px; flex: none; position: relative; margin-top: 16px; padding: 12px; border: 1px solid #b9c6e8; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(40, 55, 100, .12); font-size: 12px; }
 .maintenance-rail-stack h3 { margin: 0; }
 .maintenance-rail-stack p { margin: 0; }
 .maintenance-rail-commit { display: block; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1553,6 +1553,11 @@ a.when:hover { text-decoration: underline; }
 .maintenance-rail-tokens { color: #5b6573; }
 .maintenance-console-host { flex: none; height: clamp(230px, 44dvh, 520px); }
 .maintenance-live-console { flex: none; min-height: 0; }
+/* The details element must not shrink below its content, or the stack panel paints over the answer box. */
+.maintenance-console { flex: none; }
+.maintenance-chat .maintenance-rail-stack > button:not(.maintenance-rail-commit) { padding: 9px 12px; background: #3b5293; border-color: #3b5293; color: #fff; font-weight: 650; }
+.maintenance-chat .maintenance-rail-stack > button:not(.maintenance-rail-commit):hover { background: #2f437a; }
+.maintenance-rail-stack h3 { color: #2f437a; }
 
 .term-navigation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 8px 12px; background: var(--paper); color: var(--ink); border-top: 2px solid var(--ink); font-size: 12px; }
 .term-navigation span { overflow-wrap: anywhere; }
