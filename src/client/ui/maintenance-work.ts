@@ -31,7 +31,7 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   try { const draft = JSON.parse(localStorage.getItem(draftKey) ?? 'null'); if (draft) { title.value = typeof draft.title === 'string' ? draft.title : ''; description.value = typeof draft.body === 'string' ? draft.body : ''; queue.checked = draft.queue !== false; images.set(Array.isArray(draft.attachments) ? draft.attachments.filter((i: MaintenanceAttachment) => i && /^[a-f0-9-]{36}$/.test(i.id)) : []); updateLabel(); } } catch { /* Storage unavailable. */ }
   const form = h('form.modal.maintenance-issue-create', { role: 'dialog', 'aria-label': 'Create maintenance issue' },
     h('header', {}, h('h2', {}, 'Capture an idea')),
-    h('div.body', {}, h('p', {}, `Creates an issue in ${store.maintenanceIssues.repo ?? 'Agent Office’s repository'}. A small model (gpt-6-luna) reads the office source and crafts a technical issue from your idea. Maintenance keeps working on its current task.`), error, title, description, images.element,
+    h('div.body', {}, h('p', {}, `Creates an issue in ${store.maintenanceIssues.repo ?? 'Agent Office’s repository'}. A small model (gpt-6-luna on Codex, or Claude Code with haiku if Codex is unavailable) reads the office source and crafts a technical issue from your idea. Maintenance keeps working on its current task.`), error, title, description, images.element,
       h('label', {}, queue, ' Add to the Maintenance queue'), h('p.setting-note', {}, 'Start queued work when the agent is free. Screenshots stay with the queued item in the office; they are not published to GitHub.')),
     h('footer', {}, submit));
   images.bind(form);

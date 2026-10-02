@@ -60,19 +60,26 @@ export async function askLaptop(question: string, opts: { codex?: string; env?: 
   return 'answer' in result ? { answer: result.answer.slice(0, 20_000) } : result;
 }
 
-/** Shared read-only, ephemeral CLI runner for the laptop and issue writer. */
-export function runMaintenanceModel(prompt: string, model: string, opts: { codex?: string; env?: NodeJS.ProcessEnv } = {}): Promise<{ answer: string } | { error: string }> {
+export type MaintenanceCli = 'codex' | 'claude';
+
+/** Shared read-only, ephemeral CLI runner for the laptop and issue writer. `cli` picks codex (the default) or Claude Code. */
+export function runMaintenanceModel(prompt: string, model: string, opts: { codex?: string; claude?: string; cli?: MaintenanceCli; env?: NodeJS.ProcessEnv } = {}): Promise<{ answer: string } | { error: string }> {
   const env = opts.env ?? process.env;
   const cwd = officeSourceDir(env);
   if (!cwd) return Promise.resolve({ error: "Can't find the office's own source to look things up in (set AGENT_OFFICE_SOURCE)" });
   // Found the way workers find it: the office runs with a bare PATH (under systemd it has no ~/.local/bin), so a
   // plain `codex` isn't there to be found. It runs with the environment workers get, with its own folder and node's first on PATH.
-  const codex = opts.codex ?? resolveCommand('codex');
-  if (!codex) return Promise.resolve({ error: "The codex CLI isn't installed on the office machine (or isn't on its PATH), so the laptop has nothing to ask" });
+  const cli = opts.cli ?? 'codex';
+  const codex = (cli === 'claude' ? opts.claude : opts.codex) ?? resolveCommand(cli);
+  if (!codex) return Promise.resolve({ error: `The ${cli} CLI isn't installed on the office machine (or isn't on its PATH), so there is nothing to ask` });
   const base = opts.env ?? childEnv();
   const childPath = [path.dirname(codex), path.dirname(process.execPath), base.PATH].filter(Boolean).join(path.delimiter);
+  // Claude Code reads the prompt from stdin, limited to read-only tools and no saved session.
+  const args = cli === 'claude'
+    ? ['-p', '--model', model, '--tools', 'Read,Grep,Glob', '--permission-mode', 'dontAsk', '--no-session-persistence']
+    : ['exec', '--model', model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--color', 'never', prompt];
   return new Promise((resolve) => {
-    const child = execFile(codex, ['exec', '--model', model, '--sandbox', 'read-only', '--skip-git-repo-check', '--ephemeral', '--color', 'never', prompt], { cwd, env: { ...base, PATH: childPath }, timeout: ANSWER_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
+    const child = execFile(codex, args, { cwd, env: { ...base, PATH: childPath }, timeout: ANSWER_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       const answer = stdout.trim().slice(0, MAX_ANSWER);
       if (answer && !err) return resolve({ answer });
       if (err && (err as NodeJS.ErrnoException).code === 'ENOENT') return resolve({ error: `Couldn't run ${codex}: it, or the node it needs, is missing` });
@@ -81,6 +88,6 @@ export function runMaintenanceModel(prompt: string, model: string, opts: { codex
       resolve({ error: why || `${model} didn't answer` });
     });
     // With stdin left open, `codex exec` waits for more of the prompt after reading it from argv.
-    child.stdin?.end();
+    if (cli === 'claude') child.stdin?.end(prompt); else child.stdin?.end();
   });
 }
