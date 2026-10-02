@@ -1485,6 +1485,8 @@ a.when:hover { text-decoration: underline; }
 .maintenance-section-heading p { margin: 5px 0 0; font-size: 12px; color: #788193; }
 .maintenance-work-intro { padding: 14px; border-radius: 10px; background: #eef2ff; font-size: 12px; }
 .maintenance-work-card { border: 1px solid #e0e5ef; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #fff; overflow-wrap: anywhere; }
+.maintenance-work-card { cursor: pointer; }
+.maintenance-work-card:hover { border-color: #c5cde0; }
 .maintenance-work-card > a { display: block; font-weight: 600; color: #4564c7; text-decoration: none; }
 .maintenance-work-card small { display: block; color: #788193; margin: 4px 0 10px; }
 .maintenance-work-card button { margin: 4px 6px 0 0; font-size: 12px; }

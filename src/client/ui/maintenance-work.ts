@@ -75,6 +75,7 @@ export function workPanel(state: MaintenanceChatState, send: (message: ClientMsg
       const item = work.find(i => i.number === issue.number);
       const card = h('article.maintenance-work-card', {}, h('button.maintenance-issue-title', { type: 'button', onclick: () => openMaintenanceIssue(issue, correct, send) }, `#${issue.number} · ${issue.title}`),
         h('a', { href: issue.url, target: '_blank', rel: 'noopener noreferrer' }, 'GitHub ↗'));
+      card.addEventListener('click', e => { if (!(e.target as Element).closest('button, a, img, input, select, textarea, summary')) openMaintenanceIssue(issue, correct, send); });
       if (issue.assignees.length) card.append(h('small', {}, `Assigned to ${issue.assignees.join(', ')}`));
       if (item?.workerId) {
         const activity = { queued: 'Waiting', running: 'Agent working', review: 'Agent turn ready for review', paused: 'Agent interrupted', done: 'Agent work reviewed' }[item.status];
