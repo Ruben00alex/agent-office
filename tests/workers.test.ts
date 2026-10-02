@@ -253,6 +253,19 @@ test('Claude workers use the configured executable, pass prompts and resume ids,
   assert.equal(workers.handleHook(worker.id, firstWorker.env.hookToken!, 'UserPromptSubmit', { prompt: 'follow-up' }), true);
   assert.equal(workers.get(worker.id)?.activity, 'follow-up');
 
+  // Follow-ups keep the provider session; an independent card starts a fresh one.
+  assert.equal(workers.get(worker.id)?.sessionId, 'claude-session-1');
+  assert.match(workers.assignTask(worker.id, 'new card', 'test') ?? '', /busy/);
+  assert.equal(workers.handleHook(worker.id, firstWorker.env.hookToken!, 'Stop', {}), true);
+  assert.equal(workers.assignTask(worker.id, 'new independent card', 'test'), undefined);
+  const assigned = await waitFor(() => f.read(), (records) => records.filter((r) => r.kind === 'claude' && r.args.includes('--settings')).length >= 3);
+  const thirdWorker = assigned.filter((r) => r.kind === 'claude' && r.args.includes('--settings'))[2];
+  assert.equal(thirdWorker.args.includes('--resume'), false);
+  assert.equal(thirdWorker.args.includes('claude-session-1'), false);
+  assert.ok(hasPrompt(thirdWorker, 'new independent card'));
+  assert.equal(workers.handleHook(worker.id, firstWorker.env.hookToken!, 'Stop', {}), false, 'old session hooks cannot affect new task');
+  assert.equal(workers.get(worker.id)?.prompt, 'new independent card');
+
   // Selecting the alternate provider uses its binary with a clean argument set.
   const alternate = workers.spawn('desk-4', 'test', 'alternate provider prompt', false, 'agent', 'opencode');
   assert.equal(typeof alternate, 'object');

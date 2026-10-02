@@ -1226,8 +1226,8 @@ export type ClientMsg =
   | { t: 'worker.rebuild'; workerId: string; all?: boolean }
   | { t: 'worker.attach'; workerId: string }
   | { t: 'worker.detach'; workerId: string }
-  /** With `issue`, the prompt hands the worker that GitHub issue, which is taken as for worker.spawn. */
-  | { t: 'worker.prompt'; workerId: string; prompt: string; issue?: number }
+  /** `newTask` (or an issue card) starts a fresh conversation; ordinary prompts continue the current task. */
+  | { t: 'worker.prompt'; workerId: string; prompt: string; issue?: number; newTask?: boolean }
   /**
    * A prompt for the agent standing by a board (`deskId` is its kiosk, see STATIONS in layout). It's
    * typed into its session, which is woken up first if it's asleep, or hired there when nobody is.

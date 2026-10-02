@@ -284,7 +284,7 @@ export class TaskQueue {
   }
 
   /**
-   * No desk or bean bag is free: send home a worker the queue hired whose task is finished (nobody
+   * No capacity or seat is free: send home an eligible desk worker whose task is finished (nobody
    * is looking at its terminal), and return its seat. Workers with a linked PR go first — their work
    * is delivered.
    */
@@ -292,7 +292,7 @@ export class TaskQueue {
     const pick = this.recyclable();
     if (!pick) return undefined;
     const done = this.workers.kill(pick.w.id);
-    this.events.toast(`📋 ${pick.w.name} went home after ${label(pick.t)} to make room for the next task`, 'info');
+    this.events.toast(`📋 ${pick.w.name} went home after ${pick.t ? label(pick.t) : 'its task'} to make room for the next task`, 'info');
     void done.then(({ note, error }) => {
       if (note) this.events.toast(note, 'info');
       if (error) this.events.toast(error, 'warn');
@@ -300,14 +300,15 @@ export class TaskQueue {
     return pick.w.deskId;
   }
 
-  /** The finished worker recycleDesk would send home, if there is one. */
-  private recyclable(): { t: QueueTask; w: WorkerInfo } | undefined {
-    const byId = new Map(this.workers.list().map((w) => [w.id, w]));
-    return this.tasks
-      .filter((t) => t.status === 'done' && t.workerId && byId.has(t.workerId))
-      .map((t) => ({ t, w: byId.get(t.workerId!)! }))
-      .filter(({ w }) => FINISHED.has(w.status) && w.viewers.length === 0)
-      .sort((a, b) => Number(!!b.t.pr) - Number(!!a.t.pr) || (a.t.finishedAt ?? 0) - (b.t.finishedAt ?? 0))[0];
+  /** Prefer delivered queue tasks; manual desk workers are eligible once their turn is done. */
+  private recyclable(): { t?: QueueTask; w: WorkerInfo } | undefined {
+    return this.workers.list()
+      .filter((w) => w.kind === 'agent' && !w.meeting && !DESK_BY_ID.get(w.deskId)?.station
+        && FINISHED.has(w.status) && w.viewers.length === 0)
+      .map((w) => ({ w, t: this.tasks.find((t) => t.status === 'done' && t.workerId === w.id) }))
+      .filter(({ w, t }) => !!t || w.status === 'done')
+      .sort((a, b) => Number(!!b.t?.pr) - Number(!!a.t?.pr)
+        || (a.t?.finishedAt ?? a.w.createdAt) - (b.t?.finishedAt ?? b.w.createdAt))[0];
   }
 
   private seat() {
@@ -317,7 +318,7 @@ export class TaskQueue {
       if (this.busy() >= this.maxWorkers) break;
       // A spent budget holds the queue instead of failing every task; the pump seats them once hiring resumes.
       if (this.events.hiringPaused()) break;
-      // So does an office at its worker limit (--max-workers), unless one of the queue's own finished
+      // So does an office at its worker limit (--max-workers), unless an eligible finished
       // workers going home makes room. Over the limit (it was just lowered), it waits for people to send some home.
       const room = this.events.room?.() ?? Infinity;
       if (room < 0) break;

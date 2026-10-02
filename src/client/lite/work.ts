@@ -172,7 +172,7 @@ export function issueScreen([n]: string[]): Screen {
         isOpen
           ? button(onQueue ? (task!.status === 'running' ? `🤖 ${task!.workerName ?? 'A worker'} is on it` : '📋 On the queue') : '📋 Add to queue', () => net.send({ t: 'queue.add', prompt: issuePrompt(it!), title: `#${number} ${it!.title}`, issue: number, provider: queueProvider.value(), model: queueProvider.model(), effort: queueProvider.effort() }), '', 'A worker picks it up when a desk is free')
           : null,
-        isOpen ? button('🤖 Hand to a worker', () => sendToWorker(`Hand issue #${number} to a worker`, { initial: issuePrompt(it!) }), 'primary') : null,
+        isOpen ? button('🤖 Hand to a worker', () => sendToWorker(`Hand issue #${number} to a worker`, { initial: issuePrompt(it!), newTask: true, issue: number }), 'primary') : null,
         button('✍️ Ask a worker', () => sendToWorker(`Ask about issue #${number}`, { context: issueContext(it!) })),
         button('🤝 Meeting', () => startMeeting(issueMeeting(number, it!.title))),
         isOpen ? button('✔️ Close…', () => openClose('issue', it!, net, load)) : null,

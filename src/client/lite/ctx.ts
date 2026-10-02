@@ -4,7 +4,7 @@ import { Net } from '../net';
 import { AVATAR_COLORS, loadProfile, loadSettings, store } from '../state';
 import { randomLook } from '../../shared/avatar';
 import { DESK_BY_ID, nextFreeSeat } from '../../shared/layout';
-import { isAsleep } from '../../shared/status';
+import { isAsleep, isBusy } from '../../shared/status';
 import type { AgentEffort, AgentProvider, ServerMsg, WorkerInfo } from '../../shared/protocol';
 import { toast } from '../ui/dom';
 import { openTerminal, type TerminalFind } from '../ui/terminal';
@@ -96,10 +96,12 @@ export function hire(deskId: string, prompt: string, worktree: boolean, provider
 }
 
 /** A prompt for a worker who's here, or a new one at a free desk. */
-export function sendToWorker(title: string, text: { context?: string; initial?: string } = {}) {
+export function sendToWorker(title: string, text: { context?: string; initial?: string; newTask?: boolean; issue?: number } = {}) {
   if (!store.project) return toast('Pick a floor first', 'warn');
   const desk = nextFreeSeat((id) => !!store.workerAtDesk(id), store.floorPlan.wing)?.id;
-  const awake = [...store.workers.values()].filter((w) => w.kind === 'agent' && !isAsleep(w.status));
+  const newTask = text.newTask ?? !text.context;
+  const awake = [...store.workers.values()].filter((w) => w.kind === 'agent' && !isAsleep(w.status)
+    && (!newTask || (!isBusy(w.status) && !w.meeting && !DESK_BY_ID.get(w.deskId)?.station)));
   if (!desk && !awake.length) return toast('Every desk and bean bag is taken — send a worker home first', 'warn');
   openAsk({
     title,
@@ -110,7 +112,7 @@ export function sendToWorker(title: string, text: { context?: string; initial?: 
     providerOption: true,
     repoOptions: store.floors.filter((f) => f.id !== store.floor && f.branch && !f.cloning).map((f) => ({ id: f.id, name: f.name })),
     onSubmit: (prompt, to, worktree, provider, model, effort, repos) => {
-      if (to) net.send({ t: 'worker.prompt', workerId: to, prompt });
+      if (to) net.send({ t: 'worker.prompt', workerId: to, prompt, newTask, issue: text.issue });
       else if (desk) hire(desk, prompt, worktree, provider, model, effort, repos);
     },
   });

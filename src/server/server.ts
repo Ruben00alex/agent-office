@@ -2030,7 +2030,7 @@ export async function startServer(cfg: Config) {
       }
       case 'worker.prompt': {
         const w = worker(msg.workerId);
-        const err = w ? w.floor.workers.prompt(w.wid, str(msg.prompt, 20000), who) : 'No such worker';
+        const err = w ? (msg.newTask === true || msg.issue !== undefined ? w.floor.workers.assignTask(w.wid, str(msg.prompt, 20000), who) : w.floor.workers.prompt(w.wid, str(msg.prompt, 20000), who)) : 'No such worker';
         warn(c, err);
         const issue = w?.info.kind === 'agent' ? issueNumber(msg.issue) : undefined;
         if (w && !err && issue) {

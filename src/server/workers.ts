@@ -997,6 +997,38 @@ export class WorkerManager {
     return true;
   }
 
+  /** An independent card keeps the workspace but starts a new provider conversation. */
+  assignTask(id: string, text: string, by?: string): string | undefined {
+    const w = this.workers.get(id);
+    if (!w) return 'No such worker';
+    if (w.info.kind !== 'agent' || w.info.meeting || DESK_BY_ID.get(w.info.deskId)?.station) return 'Choose a desk worker';
+    if (isBusy(w.info.status)) return 'Worker is busy — wait until its current task finishes';
+    const clean = text.replace(/\r\n?/g, '\n').trim();
+    if (!clean) return 'Empty prompt';
+    if (this.checkLost(w, true)) return lostMessage(w.info);
+    const proc = w.pty;
+    const session = w.dsh;
+    w.pty = undefined;
+    w.dsh = undefined;
+    session?.close();
+    proc?.kill();
+    this.clearPermissionWait(w);
+    this.scanMaintenanceChat(w);
+    this.clearTask(w);
+    w.info.sessionId = undefined;
+    w.info.prompt = clean;
+    w.info.pr = undefined;
+    w.info.usage = undefined;
+    w.tracker = newTracker();
+    w.codexTranscript = undefined;
+    w.codexUsage = new CodexUsageReader();
+    w.hookToken = randomBytes(16).toString('hex');
+    w.interrupted = false;
+    w.pendingPrompt = undefined;
+    if (by) w.info.lastInput = { by, at: Date.now() };
+    return this.resume(id, clean);
+  }
+
   /** Types a prompt into the agent's input box and submits it; `by` is the person who sent it, if any. */
   prompt(id: string, text: string, by?: string): string | undefined {
     const w = this.workers.get(id);

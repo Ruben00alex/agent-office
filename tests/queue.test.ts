@@ -391,3 +391,31 @@ test("a queue worker that switches to a branch of its own takes its task's branc
   }]);
   assert.equal(q.state().tasks[0].pr?.number, 242);
 });
+
+
+test('a manually hired finished worker frees office capacity for queued work in order', (t) => {
+  const f = fixture(); t.after(() => f.close());
+  const q = f.open(() => 1 - f.workers.length);
+  q.setLimit(1);
+  // Hire independently of the queue, occupying the only office slot.
+  q.add('Manual task', 'Tester');
+  const manual = f.workers[0];
+  q.shutdown();
+  rmSync(path.join(f.dir, 'queue.json'));
+  const next = f.open(() => 1 - f.workers.length);
+  next.setLimit(1);
+  next.add('First queued task', 'Tester', undefined, undefined, 'claude', 'sonnet', 'high');
+  next.add('Second queued task', 'Tester');
+  for (const status of ['working', 'needs_input', 'idle'] as const) {
+    manual.status = status; next.onWorker(manual);
+    assert.equal(next.state().tasks[0].status, 'queued');
+  }
+  manual.status = 'done'; manual.viewers = ['Tester']; next.onWorker(manual);
+  assert.equal(next.state().tasks[0].status, 'queued');
+  manual.viewers = []; next.pump();
+  assert.equal(f.workers.length, 1);
+  assert.notEqual(f.workers[0].id, manual.id);
+  assert.equal(f.workers[0].model, 'sonnet');
+  assert.equal(f.workers[0].effort, 'high');
+  assert.deepEqual(next.state().tasks.map((t) => t.status), ['running', 'queued']);
+});
