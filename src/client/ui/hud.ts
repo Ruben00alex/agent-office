@@ -160,6 +160,7 @@ export function openHelp() {
   const rows: [string, string][] = [
     ['W A S D', 'Walk (hold Shift to run)'],
     ['Space', 'Jump'],
+    ['Shift + mouse wheel', 'In an open terminal: previous / next worker in WORKERS order, wrapping at either end. Plain scrolling scrolls the terminal'],
     ['Shift + 1–9 / 0', 'Open the corresponding worker terminal in WORKERS order (0 is tenth). Hold Shift to see the numbers'],
     ['☕', 'Press E at the coffee machine in the kitchen for a minute of quicker walking and higher jumps. Three cups in a row gives you the jitters'],
     ['Mouse', 'Look around in first person (click to capture the mouse, Esc to free it)'],

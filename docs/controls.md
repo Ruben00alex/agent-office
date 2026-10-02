@@ -41,6 +41,7 @@ The prompt edits the way it does in your own terminal (iTerm2's *Natural Text Ed
 
 | Key | Action |
 | --- | --- |
+| Shift + mouse wheel | In a 3D office terminal, scroll up for the previous worker or down for the next, in WORKERS panel order (oldest first, including kiosk agents). Wraps from last to first and first to last; the strip shows your position and both neighbors. With one worker it stays put. Plain wheel scrolling keeps its normal terminal behavior. Rapid wheel events are limited to one switch every 250 ms. |
 | Shift + Enter | A new line in an agent's prompt, without sending it (in a shell it runs the line, like Enter) |
 | Ctrl + ⌫ / ⌥ + ⌫ | Delete the word before the cursor |
 | ⌘ + ⌫ | Delete to the start of the line (Mac) |

@@ -1524,3 +1524,6 @@ a.when:hover { text-decoration: underline; }
 }
 .maintenance-console-host { flex: none; height: clamp(230px, 44dvh, 520px); }
 .maintenance-live-console { flex: none; min-height: 0; }
+
+.term-navigation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 8px 12px; background: var(--paper); color: var(--ink); border-top: 2px solid var(--ink); font-size: 12px; }
+.term-navigation span { overflow-wrap: anywhere; }

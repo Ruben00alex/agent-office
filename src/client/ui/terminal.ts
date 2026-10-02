@@ -68,6 +68,8 @@ export interface TerminalOptions {
    * take the focus as it opens either, so a phone's keyboard stays down until you tap into it.
    */
   keypad?: boolean;
+  /** Only the 3D office supplies navigation, using WORKERS panel order. */
+  navigation?: { workers(): WorkerInfo[]; open(workerId: string): void };
 }
 
 /** The keypad's keys: what each types, or a function of the terminal for the ones that depend on its mode. */
@@ -84,6 +86,8 @@ const KEYPAD: { label: string; title: string; keys: string | ((term: Terminal) =
 ];
 
 let current: { workerId: string; modal: Modal; find(f: TerminalFind): void } | null = null;
+// Keep the wheel cooldown across modal replacements so a trackpad burst cannot skip workers.
+let wheelSwitchedAt = -Infinity;
 const listeners = new Set<(msg: ServerMsg) => void>();
 
 /** Share the existing terminal stream with embedded Maintenance controls. */
@@ -137,7 +141,13 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   const sayForm = h('form.term-say', {}, say, sayBtn);
   const keypad = opts.keypad ? h('div.term-keypad', {}, keys, sayForm) : null;
   // The keypad has an Esc of its own.
-  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : escBtn, onChanges ? changesBtn : null, closeBtn), host, keypad);
+  const navigation = opts.navigation;
+  const previous = h('span', {});
+  const next = h('span', {});
+  const position = h('span', { 'aria-live': 'polite' });
+  const nav = navigation ? h('div.term-navigation', { 'aria-label': 'Worker terminal navigation' },
+    h('b', {}, 'Shift + wheel'), previous, position, next) : null;
+  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : escBtn, onChanges ? changesBtn : null, closeBtn), nav, host, keypad);
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
@@ -250,6 +260,14 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     cost.textContent = w.kind !== 'agent' ? '' : usageState === 'tracked' && w.usage ? usageLabel(w.usage, workerProvider) : waiting ? waiting : usageState === 'untracked' ? 'usage untracked' : '';
     cost.title = w.kind === 'agent' && w.usage ? usageTitle(w.usage, workerProvider) : w.kind === 'agent' ? providerUsageNote(workerProvider!) : '';
     renderPresence(w);
+    if (navigation) {
+      const workers = navigation.workers();
+      const index = workers.findIndex((worker) => worker.id === workerId);
+      const multiple = workers.length > 1 && index >= 0;
+      previous.textContent = multiple ? `↑ ${workers[(index + workers.length - 1) % workers.length].name}` : '';
+      next.textContent = multiple ? `↓ ${workers[(index + 1) % workers.length].name}` : '';
+      position.textContent = `${w.name} · ${index + 1}/${workers.length}${multiple ? ' · wraps around' : ' · no other workers'}`;
+    }
     const openCode = w.kind === 'agent' && resolvedProvider(w.provider, store.project) === 'opencode';
     modelsBtn.classList.toggle('hidden', !openCode);
     modelsBtn.toggleAttribute('disabled', !openCode || !ready || isAsleep(w.status));
@@ -350,6 +368,24 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     onChanges?.();
     modal.close();
   });
+
+  if (navigation) {
+    // Capture before xterm handles wheel scrolling or sends mouse reports to the PTY.
+    el.addEventListener('wheel', (e) => {
+      if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+      const delta = e.deltaY || e.deltaX; // Browsers may translate Shift + wheel to horizontal motion.
+      if (!delta) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const now = performance.now();
+      if (now - wheelSwitchedAt < 250) return;
+      const workers = navigation.workers();
+      const index = workers.findIndex((worker) => worker.id === workerId);
+      if (index < 0 || workers.length < 2) return;
+      wheelSwitchedAt = now;
+      navigation.open(workers[(index + (delta > 0 ? 1 : -1) + workers.length) % workers.length].id);
+    }, { capture: true, passive: false });
+  }
 
   term.open(host);
   const sendEsc = () => {
@@ -488,5 +524,5 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   ro.observe(host);
   refresh();
   net.send({ t: 'worker.attach', workerId });
-  if (!opts.keypad) setTimeout(() => term.focus(), 50);
+  if (!opts.keypad) setTimeout(() => { if (current?.modal === modal) term.focus(); }, 50);
 }

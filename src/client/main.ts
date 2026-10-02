@@ -2534,7 +2534,9 @@ function fixLostWorktree(w: WorkerInfo) {
     lost: w.lost,
     workspace: w.repos?.length ? w.worktree.path.replace(/[\\/][^\\/]*$/, '') : undefined,
     others: others.map((o) => o.name),
-    openTerminal: isAsleep(w.status) ? undefined : () => openTerminal(net, w.id, () => openWorkerChanges(w.id)),
+    openTerminal: isAsleep(w.status) ? undefined : () => openTerminal(net, w.id, () => openWorkerChanges(w.id), undefined, {
+      navigation: { workers: orderedWorkers, open: (nextId) => openWorkerTerminal(nextId, undefined, true) },
+    }),
     rebuild: (all) => {
       toast(all ? `Rebuilding ${others.length + 1} worktrees…` : `Rebuilding ${w.name}'s worktree…`);
       net.send({ t: 'worker.rebuild', workerId: w.id, all });
@@ -2722,7 +2724,9 @@ function openWorkerTerminal(id: string, find?: TerminalFind, rawTerminal = false
   if (settings.maintenanceChat && w.deskId === MAINTENANCE_DESK && !find && !rawTerminal) return void openMaintenanceConversation();
   if (w.lost) return fixLostWorktree(w);
   if (isAsleep(w.status)) resumeWorker(w);
-  openTerminal(net, id, () => openWorkerChanges(id), find);
+  openTerminal(net, id, () => openWorkerChanges(id), find, {
+    navigation: { workers: orderedWorkers, open: (nextId) => openWorkerTerminal(nextId, undefined, true) },
+  });
 }
 
 /** 🔎 the chat and every terminal; a terminal line opens that terminal right at it. */
