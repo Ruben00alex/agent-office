@@ -1420,6 +1420,8 @@ a.when:hover { text-decoration: underline; }
 .maintenance-chat-empty { max-width: 440px; margin: 60px auto; color: #788193; text-align: center; }
 .maintenance-chat-empty h3 { font-size: 24px; color: #354259; font-weight: 600; }
 .maintenance-chat-composer { padding: 16px 24px; border-top: 1px solid #e7eaf0; background: #fff; }
+.maintenance-chat-main > .provider-pick { padding: 8px 24px 0; border-top: 1px solid #e7eaf0; background: #fff; }
+.maintenance-chat-main > .provider-pick + .maintenance-chat-composer { border-top: 0; }
 .maintenance-chat-composer textarea { width: 100%; min-height: 70px; max-height: 180px; resize: vertical; padding: 12px; }
 .maintenance-composer-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
 .maintenance-composer-note { color: #788193; font-size: 11px; margin: 0; }

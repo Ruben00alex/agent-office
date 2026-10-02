@@ -104,17 +104,16 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     saveDraft(); selectTab('conversation'); newConversation = true; selected = undefined; loadedDraft = ''; messages = []; messageKey = ''; showError(''); void refresh().then(() => input.focus());
   } }, '+ New conversation');
   // The agent is on what it was hired on, so a request to move it (say, off a model that's out of credits) hires it afresh there.
-  const model = providerPicker(store.project, 'maintenance-provider', 'Runs on', () => newConversation ? undefined : workerChoice(state?.worker));
+  const model = providerPicker(store.project, 'maintenance-provider', 'Runs on', () => newConversation || tab === 'work' ? undefined : workerChoice(state?.worker));
   model.element.addEventListener('click', () => setTimeout(updateControls));
-  const form = h('form.maintenance-chat-composer', {}, error, input, images.element, model.element,
-    h('div.maintenance-composer-bottom', {}, note, submit));
+  const form = h('form.maintenance-chat-composer', {}, error, input, images.element, h('div.maintenance-composer-bottom', {}, note, submit));
   const close = h('button.close', { type: 'button', 'aria-label': 'Close Maintenance chat' }, '✕');
   const el = h('div.modal.maintenance-chat', { role: 'dialog', 'aria-label': 'Maintenance engineering workspace' },
     h('header', {}, h('div', {}, h('span.maintenance-experiment', {}, 'AGENT OFFICE · ENGINEERING'), h('h2', {}, 'Maintenance'), status),
       h('div.maintenance-chat-tools', {}, h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, 'Review stack'), terminal, end, close)),
     h('div.maintenance-chat-layout', {},
       h('aside', {}, capture, create, current, h('h3', {}, 'Conversation archive'), h('small', {}, 'Shared with the office · saved across restarts'), search, archive),
-      h('section.maintenance-chat-main', {}, tabs, older, list, work, review, form), consoleRail));
+      h('section.maintenance-chat-main', {}, tabs, older, list, work, review, model.element, form), consoleRail));
   images.bind(form);
   const modal = openModal(el, { doing: 'chatting with Maintenance', onClose: () => {
     saveDraft();
@@ -164,6 +163,8 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     older.classList.toggle('hidden', tab !== 'conversation' || !state?.conversation?.hasOlder);
     if (tab === 'review') void drawReview();
     if (tab === 'work') drawWork();
+    model.element.classList.toggle('hidden', tab === 'review');
+    model.repaint();
   }
   function startIssue(item: MaintenanceWorkItem) {
     if (pending) return;
@@ -171,7 +172,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     saveDraft(); showError('');
     const id = crypto.randomUUID();
     pending = { id, text: input.value, attachments: images.images, timer: setTimeout(() => { pending = undefined; showError('No acknowledgement yet. Check the current work before starting again.'); void refresh(); }, 30000) };
-    send({ t: 'maintenance.chat.send', id, prompt: '', maintenanceIssue: item.number, newConversation: true });
+    send({ t: 'maintenance.chat.send', id, prompt: '', maintenanceIssue: item.number, newConversation: true, ...(model.edited() ? { provider: model.value(), model: model.model(), effort: model.effort() } : {}) });
     updateControls();
   }
   function correctHere(context?: string) {
