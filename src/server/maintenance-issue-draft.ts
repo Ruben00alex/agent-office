@@ -23,11 +23,15 @@ function unfence(answer: string): string {
   return m ? m[1] : answer;
 }
 
-/** Drafts with Codex (gpt-6-luna), or with Claude Code (haiku) when Codex can't answer (out of usage, not installed). */
-export async function draftMaintenanceIssue(title: string, body: string, opts: { codex?: string; claude?: string; env?: NodeJS.ProcessEnv } = {}) {
+/** Drafts with Codex (gpt-6-luna), or with Claude Code (haiku) when Codex can't answer (out of usage, not installed). `writer` pins one of them. */
+export type IssueWriter = 'auto' | 'codex' | 'claude';
+export const isIssueWriter = (v: unknown): v is IssueWriter => v === 'auto' || v === 'codex' || v === 'claude';
+
+export async function draftMaintenanceIssue(title: string, body: string, opts: { writer?: IssueWriter; codex?: string; claude?: string; env?: NodeJS.ProcessEnv } = {}) {
   if (!title.trim() || title.length > 200 || body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
   const prompt = `${ISSUE_DRAFT_BRIEF}\n\nUser request:\n${JSON.stringify({ title, body })}`;
-  const attempts: [MaintenanceCli, string][] = [['codex', ISSUE_DRAFT_MODEL], ['claude', ISSUE_DRAFT_CLAUDE_MODEL]];
+  const all: [MaintenanceCli, string][] = [['codex', ISSUE_DRAFT_MODEL], ['claude', ISSUE_DRAFT_CLAUDE_MODEL]];
+  const attempts = all.filter(([cli]) => !opts.writer || opts.writer === 'auto' || opts.writer === cli);
   const errors: string[] = [];
   for (const [cli, model] of attempts) {
     const result = await runMaintenanceModel(prompt, model, { ...opts, cli });

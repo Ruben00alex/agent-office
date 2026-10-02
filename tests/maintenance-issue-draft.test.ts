@@ -52,6 +52,7 @@ test('issue writing falls back to Claude Code with haiku when Codex fails', { sk
     assert.deepEqual(await draftMaintenanceIssue('lighting', 'Make it brighter', opts), expected);
     assert.match(readFileSync(argsFile, 'utf8'), /-p\n--model\nhaiku\n--tools\nRead,Grep,Glob/);
     assert.match(readFileSync(`${argsFile}.stdin`, 'utf8'), /Make it brighter/);
+    await assert.rejects(draftMaintenanceIssue('lighting', 'x', { ...opts, writer: 'codex' }), /usage limit/);
     writeFileSync(claude, '#!/bin/sh\ncat >/dev/null\necho "not logged in" >&2\nexit 1\n');
     await assert.rejects(draftMaintenanceIssue('lighting', '', opts), /codex: usage limit.*claude: not logged in/);
   } finally { rmSync(dir, { recursive: true, force: true }); }

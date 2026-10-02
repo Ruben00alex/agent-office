@@ -25,6 +25,11 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   const submit = h('button.btn.primary', { type: 'submit' }, 'Create GitHub issue & queue');
   const images = imageComposer(() => { save(); submit.disabled = sending || images.uploading; }, showError);
   const queue = h('input', { type: 'checkbox', checked: true });
+  const writer = h('select', { 'aria-label': 'Issue writer model' },
+    h('option', { value: 'auto' }, 'Auto: Codex gpt-6-luna, then Claude haiku'), h('option', { value: 'codex' }, 'Codex · gpt-6-luna'), h('option', { value: 'claude' }, 'Claude Code · haiku'));
+  const writerKey = 'agent-office.maintenance-issue-writer-v1';
+  try { const saved = localStorage.getItem(writerKey); if (saved === 'codex' || saved === 'claude') writer.value = saved; } catch { /* Storage unavailable. */ }
+  writer.addEventListener('change', () => { try { localStorage.setItem(writerKey, writer.value); } catch { /* Storage unavailable. */ } });
   const updateLabel = () => { submit.textContent = queue.checked ? 'Create GitHub issue & queue' : 'Create GitHub issue'; };
   queue.addEventListener('change', () => { updateLabel(); save(); });
   title.addEventListener('input', save); description.addEventListener('input', save);
@@ -32,6 +37,7 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   const form = h('form.modal.maintenance-issue-create', { role: 'dialog', 'aria-label': 'Create maintenance issue' },
     h('header', {}, h('h2', {}, 'Capture an idea')),
     h('div.body', {}, h('p', {}, `Creates an issue in ${store.maintenanceIssues.repo ?? 'Agent Office’s repository'}. A small model (gpt-6-luna on Codex, or Claude Code with haiku if Codex is unavailable) reads the office source and crafts a technical issue from your idea. Maintenance keeps working on its current task.`), error, title, description, images.element,
+      h('label', {}, 'Written by ', writer),
       h('label', {}, queue, ' Add to the Maintenance queue'), h('p.setting-note', {}, 'Start queued work when the agent is free. Screenshots stay with the queued item in the office; they are not published to GitHub.')),
     h('footer', {}, submit));
   images.bind(form);
@@ -39,10 +45,10 @@ export function openMaintenanceIssueCreate(saved: () => void) {
   form.addEventListener('submit', e => {
     e.preventDefault(); if (sending || images.uploading || !title.value.trim()) return;
     if (!queue.checked && images.images.length) { showError('Keep “Add to the Maintenance queue” checked to retain screenshot evidence with this issue.'); return; }
-    sending = true; submit.textContent = 'Crafting issue…'; submit.disabled = true; title.disabled = description.disabled = queue.disabled = true; images.disable(true); showError('');
-    void maintenancePost('/api/maintenance/issue', { title: title.value, body: description.value, queue: queue.checked, attachments: images.images.map(i => i.id) })
+    sending = true; submit.textContent = 'Crafting issue…'; submit.disabled = true; title.disabled = description.disabled = queue.disabled = writer.disabled = true; images.disable(true); showError('');
+    void maintenancePost('/api/maintenance/issue', { title: title.value, body: description.value, queue: queue.checked, writer: writer.value, attachments: images.images.map(i => i.id) })
       .then(() => { completed = true; try { localStorage.removeItem(draftKey); } catch { /* Storage unavailable. */ } modal.close(); saved(); })
-      .catch(err => { showError(err.message); sending = false; updateLabel(); submit.disabled = false; title.disabled = description.disabled = queue.disabled = false; images.disable(false); });
+      .catch(err => { showError(err.message); sending = false; updateLabel(); submit.disabled = false; title.disabled = description.disabled = queue.disabled = writer.disabled = false; images.disable(false); });
   });
   title.focus(); return modal;
 }

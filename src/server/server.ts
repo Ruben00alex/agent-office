@@ -47,7 +47,7 @@ import { DROP_MAX_BYTES } from '../shared/drops.js';
 import { MAX_FLOORS } from '../shared/floors.js';
 import { lookFromSeed, sanitizeLook } from '../shared/avatar.js';
 import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree } from './maintenance.js';
-import { draftMaintenanceIssue } from './maintenance-issue-draft.js';
+import { draftMaintenanceIssue, isIssueWriter } from './maintenance-issue-draft.js';
 import { MaintenanceChatArchive } from './maintenance-chat.js';
 import { MaintenanceImages, MaintenanceWork, MAINTENANCE_IMAGE_MAX } from './maintenance-work.js';
 import { MaintenanceBoard } from './maintenance-board.js';
@@ -1169,7 +1169,7 @@ export async function startServer(cfg: Config) {
             const as = session.account ? signins.ghAs(session.account.id) : undefined;
             if (typeof as === 'string') throw new Error(as);
             const images = maintenanceImages.resolve(body.attachments ?? []);
-            const draft = await draftMaintenanceIssue(str(body.title, 201), str(body.body, 20001));
+            const draft = await draftMaintenanceIssue(str(body.title, 201), str(body.body, 20001), { writer: isIssueWriter(body.writer) ? body.writer : 'auto' });
             const issue = await maintenanceBoard.create(draft.title, draft.body, as);
             if (body.queue === true) {
               await maintenanceBoard.queue(issue.number, true, as);
