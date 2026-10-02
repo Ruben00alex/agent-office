@@ -27,27 +27,23 @@ const STATION_INFO: Record<string, { icon: string; offer: string; example: strin
 };
 
 /** A board agent's prompt: the same box the kiosk gives you at the office. */
-function askBoardAgent(deskId: string, kind: string, fresh = false) {
+function askBoardAgent(deskId: string, kind: string) {
   const w = store.workerAtDesk(deskId);
   const name = STATION_AGENT[kind as 'issues'].name;
   const info = STATION_INFO[kind];
-  if (fresh && w && !['idle', 'done', 'exited'].includes(w.status)) {
-    toast(w.status === 'needs_input' ? `The ${name} is waiting on an answer. Open its terminal to respond before starting fresh.` : `The ${name} is busy. Wait for it to finish before starting fresh.`, 'warn');
-    return;
-  }
   if (w?.status === 'needs_input') {
     toast(`The ${name} is waiting on an answer — here's its terminal`, 'warn');
     return openWorker(w.id);
   }
   openPrompt({
-    title: fresh ? `${info.icon} New conversation with the ${name}` : `${info.icon} Ask the ${name}`,
-    subtitle: fresh ? 'Your first message starts a fresh session. This board agent has no conversation history list.' : !w ? `${info.offer}, in a terminal of its own.` : isAsleep(w.status) ? `The ${name} is asleep: this wakes it up.` : isBusy(w.status) ? `The ${name} is busy. Your prompt waits in its input box.` : undefined,
+    title: `${info.icon} Ask the ${name}`,
+    subtitle: !w ? `${info.offer}, in a terminal of its own.` : isAsleep(w.status) ? `The ${name} is asleep: this wakes it up.` : isBusy(w.status) ? `The ${name} is busy. Your prompt waits in its input box.` : undefined,
     placeholder: `e.g. ${info.example}`,
     submitLabel: 'Send ✨',
     providerOption: true,
     providerLabel: 'Runs on',
     providerCurrent: workerChoice(w),
-    onSubmit: (text, o) => net.send({ t: 'station.prompt', deskId, prompt: text, ...(fresh ? { newConversation: true } : {}), ...(o.picked && o.provider ? { provider: o.provider, model: o.model, effort: o.effort } : {}) }),
+    onSubmit: (text, o) => net.send({ t: 'station.prompt', deskId, prompt: text, ...(o.picked && o.provider ? { provider: o.provider, model: o.model, effort: o.effort } : {}) }),
   });
 }
 
@@ -69,12 +65,7 @@ export function agentsScreen(): Screen {
       ...STATIONS.filter((s) => s.station && STATION_INFO[s.station]).map((s) => {
         const w = store.workerAtDesk(s.id);
         const info = STATION_INFO[s.station!];
-        return h(
-          'section.lp',
-          { 'aria-label': STATION_AGENT[s.station!].name },
-          row({ icon: info.icon, title: STATION_AGENT[s.station!].name, sub: `${info.offer}${w ? ` · ${w.status === 'needs_input' ? '🙋 waiting on you' : isAsleep(w.status) ? '💤 asleep' : w.status === 'working' ? 'working' : 'ready'}` : ''}`, onclick: () => askBoardAgent(s.id, s.station!) }),
-          actions(button('➕ New conversation', () => askBoardAgent(s.id, s.station!, true))),
-        );
+        return row({ icon: info.icon, title: STATION_AGENT[s.station!].name, sub: `${info.offer}${w ? ` · ${w.status === 'needs_input' ? '🙋 waiting on you' : isAsleep(w.status) ? '💤 asleep' : w.status === 'working' ? 'working' : 'ready'}` : ''}`, onclick: () => askBoardAgent(s.id, s.station!) });
       }),
       heading('Permissions'),
       h(
@@ -201,7 +192,7 @@ export function agentChatScreen([kind]: string[]): Screen {
   const tabs = h('div');
   const conversationActions = actions(
     button('🧭 All agents', () => go('agents')),
-    ...(maintenance ? [] : [button('➕ New conversation', () => pick(undefined, true)), button('🕘 History', openHistory)]),
+    ...(maintenance ? [] : [button('🕘 History', openHistory)]),
   );
   const jump = h('button.lp-jump.hidden', { type: 'button', 'aria-label': 'Jump to the latest message', onclick: () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }) }, '↓');
   const frame = layout({ top: [tabs, conversationActions], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });

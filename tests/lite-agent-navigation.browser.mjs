@@ -33,16 +33,19 @@ try {
   await allAgents.tap();
   await page.getByRole('heading', { name: 'Agents', exact: true }).waitFor();
   assert.equal(await page.locator('#lite-tabs').isVisible(), true);
+  assert.equal(await page.getByRole('button', { name: /New conversation/ }).count(), 0);
   for (const name of ['Issues agent', 'PR agent']) {
-    await page.getByRole('region', { name, exact: true }).getByRole('button', { name: '➕ New conversation', exact: true }).tap();
+    await page.getByRole('button', { name: new RegExp(name) }).tap();
     await page.getByRole('dialog').getByRole('textbox').fill(`Start ${name}`);
     await page.getByRole('dialog').getByRole('button', { name: 'Send ✨', exact: true }).tap();
     const message = await page.evaluate(() => sent.at(-1));
-    assert.equal(message.t, 'station.prompt'); assert.equal(message.newConversation, true);
+    assert.equal(message.t, 'station.prompt'); assert.equal(message.newConversation, undefined);
     await page.waitForTimeout(200);
   }
   await page.getByRole('button', { name: /Product Lead Think the project through/ }).tap();
-  await page.getByRole('button', { name: '➕ New conversation', exact: true }).tap();
+  assert.equal(await page.getByRole('button', { name: '➕ New conversation', exact: true }).count(), 0);
+  await page.getByRole('button', { name: '🕘 History', exact: true }).tap();
+  await page.getByRole('button', { name: /New conversation/ }).tap();
   await page.getByRole('textbox', { name: 'Message to Product Lead' }).fill('Start Product Lead');
   await page.getByRole('button', { name: 'Send', exact: true }).tap();
   assert.equal(await page.evaluate(() => sent.at(-1).t), 'product.chat.send');
