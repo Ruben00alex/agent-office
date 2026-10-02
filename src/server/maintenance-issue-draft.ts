@@ -19,11 +19,9 @@ export function parseIssueDraft(answer: string): { title: string; body: string }
 
 /** Pulls the JSON object out of a reply, tolerating code fences and prose around it (haiku likes both). */
 function unfence(answer: string): string {
-  const text = answer.trim();
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const inner = fenced ? fenced[1] : text;
-  const start = inner.indexOf('{'), end = inner.lastIndexOf('}');
-  return start >= 0 && end > start ? inner.slice(start, end + 1) : inner;
+  // Not a fence regex: the body itself may contain ``` code blocks.
+  const start = answer.indexOf('{'), end = answer.lastIndexOf('}');
+  return start >= 0 && end > start ? answer.slice(start, end + 1) : answer;
 }
 
 /** Drafts with Codex (gpt-6-luna), or with Claude Code (haiku) when Codex can't answer (out of usage, not installed). `writer` pins one of them. */

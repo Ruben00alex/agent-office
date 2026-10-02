@@ -55,6 +55,10 @@ test('issue writing falls back to Claude Code with haiku when Codex fails', { sk
     await assert.rejects(draftMaintenanceIssue('lighting', 'x', { ...opts, writer: 'codex' }), /usage limit/);
     writeFileSync(claude, `#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' 'Here is the issue:' '${JSON.stringify(expected)}' 'Hope that helps!'\n`);
     assert.deepEqual(await draftMaintenanceIssue('lighting', 'Make it brighter', opts), expected);
+    const withCode = { title: 'Code issue', body: 'See:\n```ts\nconst a = 1;\n```\nDone' };
+    writeFileSync(`${claude}.json`, `Sure:\n\`\`\`json\n${JSON.stringify(withCode, null, 2)}\n\`\`\`\n`);
+    writeFileSync(claude, `#!/bin/sh\ncat >/dev/null\ncat '${claude}.json'\n`);
+    assert.deepEqual(await draftMaintenanceIssue('lighting', 'Make it brighter', opts), withCode);
     writeFileSync(claude, '#!/bin/sh\ncat >/dev/null\necho "not logged in" >&2\nexit 1\n');
     await assert.rejects(draftMaintenanceIssue('lighting', '', opts), /codex: usage limit.*claude: not logged in/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
