@@ -21,6 +21,7 @@ import { Services } from './services.js';
 import { ImageProxy } from './decor.js';
 import { Ledger } from './usage.js';
 import { PlanLimitsReader } from './limits.js';
+import { CodexLimitsReader } from './codex-limits.js';
 import { CodexPlanSnapshot } from './codex-usage.js';
 import { Webhook } from './webhook.js';
 import { MAX_WORKER_LIMIT, Machine, parseWorkerLimit } from './machine.js';
@@ -609,6 +610,16 @@ export async function startServer(cfg: Config) {
     () => [...clients.values()].some((c) => limitsOf(c) === limits),
     (state) => {
       for (const c of clients.values()) if (limitsOf(c) === limits) sendTo(c, { t: 'limits', state });
+    },
+  );
+  // Codex's own answer for its account: workers' reports stop carrying percentages once the limit is hit.
+  const codexPoll = new CodexLimitsReader(
+    configuredProvider(cfg.agentCmd) === 'codex' ? resolveCommand(cfg.agentCmd) : resolveCommand('codex'),
+    childEnv(),
+    () => clients.size > 0,
+    (state) => {
+      codexLimits.state = state;
+      broadcast({ t: 'codex.limits', state });
     },
   );
   const accountLimits = new Map<string, { key: string; reader: PlanLimitsReader }>();
@@ -1485,6 +1496,7 @@ export async function startServer(cfg: Config) {
       floor.workers.wakeAll();
     }
     limitsOf(client).refresh();
+    codexPoll.refresh();
     if (account) {
       sendTo(client, { t: 'signins', state: signins.state(account.id) });
       void signins.look(account.id);
@@ -2584,6 +2596,7 @@ export async function startServer(cfg: Config) {
         break;
       case 'limits.refresh':
         limitsOf(c).refresh();
+        codexPoll.refresh();
         break;
       case 'team.get':
         void teamState().then((state) => sendTo(c, { t: 'team', state }));
@@ -2914,6 +2927,7 @@ export async function startServer(cfg: Config) {
     for (const f of floors.values()) f.shutdown(keep);
     ledger.flush();
     limits.close();
+    codexPoll.close();
     for (const a of accountLimits.values()) a.reader.close();
     signins.shutdown();
     for (const c of clients.values()) c.ws.close();
