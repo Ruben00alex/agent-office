@@ -2,7 +2,7 @@ import type { AgentEffort, AgentProvider, GhIssue, GhLabel, GhPull, WorkerInfo }
 import type { Net } from '../net';
 import { store, workerForPull } from '../state';
 import { h, openModal, timeAgo } from './dom';
-import { labelChip, openIssue, openLabels, openPull } from './pull';
+import { labelChip, openClose, openIssue, openLabels, openPull } from './pull';
 import { providerLabel } from './provider';
 import type { MeetingPreset } from './meeting';
 import { officePrompt } from './prompts';
@@ -133,7 +133,7 @@ function queueChip(issue: number): Node | '' {
   return t.pr ? h('span.qchip.done', {}, `🔀 PR #${t.pr.number} · ${provider}`) : '';
 }
 
-function card(n: number, title: string, meta: (Node | string)[], i: number, onclick: () => void, onLabels: () => void) {
+function card(n: number, title: string, meta: (Node | string)[], i: number, onclick: () => void, onLabels: () => void, onClose?: () => void) {
   return h(
     'li.card',
     {
@@ -143,6 +143,7 @@ function card(n: number, title: string, meta: (Node | string)[], i: number, oncl
       onkeydown: ((e: KeyboardEvent) => e.key === 'Enter' && e.target === e.currentTarget && onclick()) as EventListener,
     },
     h('button.card-labels', { type: 'button', title: 'Change the labels', 'aria-label': `Change the labels on #${n}`, onclick: ((e: Event) => (e.stopPropagation(), onLabels())) as EventListener }, '🏷️'),
+    onClose ? h('button.card-close', { type: 'button', title: `Close issue #${n} on GitHub`, 'aria-label': `Close issue #${n}`, onclick: ((e: Event) => (e.stopPropagation(), onClose())) as EventListener }, '✓') : null,
     h('div.num', {}, `#${n}`),
     h('div.ttl', {}, title),
     h('div.meta', {}, ...meta.filter((m) => m !== '').map((m) => (typeof m === 'string' ? h('span', {}, m) : m))),
@@ -152,9 +153,10 @@ function card(n: number, title: string, meta: (Node | string)[], i: number, oncl
 export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActions) {
   const body = h('div.body');
   const status = h('span.board-status');
+  const scope = h('span.board-scope', { title: kind === 'issues' ? "Agent Office's own issues are on the board in the maintenance closet" : 'A merged PR closes its issue only once GitHub shows the issue closed' }, `${store.project?.name ?? 'This floor'} · ${kind === 'issues' ? 'project issues' : 'pull requests'}`);
   const refresh = h('button.btn', { title: 'Refresh from GitHub', onclick: () => net.send({ t: 'gh.refresh' }) }, '🔄 Refresh');
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
-  const el = h('div.modal.board', { role: 'dialog', 'aria-label': kind === 'issues' ? 'Issues board' : 'Pull requests board' }, h('header', {}, h('h2', {}, kind === 'issues' ? '📌 Issues' : '🔀 Pull Requests'), status, refresh, close), body);
+  const el = h('div.modal.board', { role: 'dialog', 'aria-label': kind === 'issues' ? 'Issues board' : 'Pull requests board' }, h('header', {}, h('h2', {}, kind === 'issues' ? '📌 Issues' : '🔀 Pull Requests'), scope, status, refresh, close), body);
 
   const filters = loadFilters(kind);
   /** What each column's filter box holds (column key → text), for as long as the board is open. */
@@ -281,7 +283,7 @@ export function openBoard(kind: 'issues' | 'pulls', net: Net, actions: BoardActi
       for (const col of issueColumns(store.issues.items)) {
         body.append(
           column(col, all, (it, i) =>
-            card(it.number, it.title, [...labelChips(it.labels), queueChip(it.number), it.assignees.length ? `👤 ${it.assignees.join(', ')}` : `by ${it.author}`, it.comments ? `💬 ${it.comments}` : '', timeAgo(it.updatedAt)], i, () => openIssue(it, net, actions), () => openLabels('issue', it, net)),
+            card(it.number, it.title, [...labelChips(it.labels), queueChip(it.number), it.assignees.length ? `👤 ${it.assignees.join(', ')}` : `by ${it.author}`, it.comments ? `💬 ${it.comments}` : '', timeAgo(it.updatedAt)], i, () => openIssue(it, net, actions), () => openLabels('issue', it, net), it.state === 'OPEN' ? () => openClose('issue', it, net, () => net.send({ t: 'gh.refresh' })) : undefined),
           ),
         );
       }

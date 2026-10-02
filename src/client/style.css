@@ -569,6 +569,11 @@ body.telescope-active #hud { visibility: hidden; }
 /* A card's 🏷️ (the label picker) shows on hover or focus; touch screens always show it. */
 .card-labels { position: absolute; top: 5px; right: 5px; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; font-size: 13px; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; box-shadow: 0 2px 0 var(--ink); cursor: pointer; opacity: 0; transition: opacity .1s; }
 .card:hover .card-labels, .card:focus-within .card-labels { opacity: 1; }
+.card-close { position: absolute; top: 5px; right: 36px; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; box-shadow: 0 2px 0 var(--ink); cursor: pointer; opacity: 0; transition: opacity .1s; }
+.card:hover .card-close, .card:focus-within .card-close { opacity: 1; }
+.card-close:hover { background: #caffbf; }
+@media (hover: none) { .card-close { opacity: 1; } }
+.board-scope { font-size: 12px; font-weight: 700; color: var(--muted); }
 .card-labels:hover { background: var(--paper-2); }
 @media (hover: none) { .card-labels { opacity: 1; } }
 .board-status { font-size: 12px; font-weight: 700; color: var(--muted); }

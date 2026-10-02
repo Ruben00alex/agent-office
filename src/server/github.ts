@@ -263,6 +263,10 @@ export class GitHub {
       return (err as Error).message;
     }
     void this.refreshPulls();
+    // A merge closes the issues it links, but GitHub does that a moment later, so look at the issues now
+    // and again shortly after: the board shows an issue closed only once GitHub says so.
+    void this.refreshIssues();
+    setTimeout(() => void this.refreshIssues(), 5000);
     return undefined;
   }
 
