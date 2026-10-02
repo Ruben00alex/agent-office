@@ -1,4 +1,5 @@
 import type { ClientMsg, MaintenanceAttachment, MaintenanceChatMessage, MaintenanceChatState, MaintenanceWorkItem, ServerMsg } from '../../shared/protocol';
+import { fmtTokens, tokensOf } from '../../shared/protocol';
 import { store } from '../state';
 import { h, openModal } from './dom';
 import { markdown } from './markdown';
@@ -106,7 +107,8 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
   const consoleHost = h('div.maintenance-live-console');
   const consoleDetails = h('details.maintenance-console', {}, h('summary', {}, 'Live agent console · prompts, permissions & output'), consoleHost);
   consoleDetails.open = true;
-  const consoleRail = h('section.maintenance-console-rail', {}, h('h3', {}, 'Agent control'), activity, attention, consoleDetails);
+  const stackPanel = h('div.maintenance-rail-stack');
+  const consoleRail = h('section.maintenance-console-rail', {}, h('h3', {}, 'Agent control'), activity, attention, consoleDetails, stackPanel);
   const tabs = h('nav.maintenance-tabs', { 'aria-label': 'Maintenance workspace views' });
   for (const [value, label] of [['conversation', 'Conversation'], ['work', 'Work & issues'], ['review', 'Review & checks']] as const) tabs.append(h('button', { type: 'button', 'data-tab': value, onclick: () => selectTab(value) }, label));
 
@@ -234,6 +236,24 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
         ...(result.truncated ? [h('p', {}, 'Large changes: this preview is truncated. Ask the agent to explain the rest.')] : []));
     } catch (err) { if (!closed && working.isConnected) working.replaceChildren(h('p.maintenance-chat-error', {}, (err as Error).message)); }
   }
+  /** Read-only stack summary under the console: recent commits, the last check and the session's tokens. */
+  function drawStackPanel() {
+    const stack = state?.stack ?? store.maintenance;
+    const worker = state?.worker;
+    const v = stack.validation;
+    const recent = [...stack.changes].reverse().slice(0, 3);
+    const checks = v?.phase === 'running' ? h('span.maintenance-rail-badge', {}, `Checking: ${v.step ?? 'Starting'}…`)
+      : v ? h('span.maintenance-rail-badge', { class: v.phase === 'passed' ? 'good' : 'bad' }, `${v.phase === 'passed' ? '✓' : '✕'} Checks ${v.phase}`, h('small', {}, ` · ${new Date(v.finishedAt ?? v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`))
+      : h('p.maintenance-muted', {}, 'Ready. Run checks before shipping.');
+    const usage = worker?.usage ? tokensOf(worker.usage) : 0;
+    stackPanel.replaceChildren(
+      h('h3', {}, `Stack · ${stack.changes.length} commit${stack.changes.length === 1 ? '' : 's'}${stack.dirty ? ` + ${stack.dirty} edited` : ''}`),
+      ...(recent.length ? recent.map(c => h('button.maintenance-rail-commit', { type: 'button', title: c.subject, onclick: () => openStackChange(c, reviewActions) }, h('code', {}, c.sha.slice(0, 7)), ` ${c.subject}`))
+        : [h('p.maintenance-muted', {}, 'No stacked changes. Maintenance will create them.')]),
+      checks,
+      h('button', { type: 'button', onclick: () => { modal.close(); reviewStack(); } }, stack.changes.length > 3 ? `Review all ${stack.changes.length} & ship` : stack.changes.length || stack.dirty ? 'Review stack & ship' : 'Review stack'),
+      ...(worker && usage ? [h('p.maintenance-rail-tokens', {}, `${fmtTokens(usage)} tokens this session`)] : []));
+  }
   function updateControls() {
     const worker = state?.worker;
     model.repaint();
@@ -270,6 +290,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
       else consoleHost.replaceChildren(h('p.maintenance-muted', {}, 'The live console appears when Maintenance starts.'));
     }
     if (worker) consoleView?.update(worker);
+    drawStackPanel();
     drawWork();
     if (tab === 'review') void drawReview();
   }

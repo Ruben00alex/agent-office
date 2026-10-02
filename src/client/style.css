@@ -1539,6 +1539,13 @@ a.when:hover { text-decoration: underline; }
   .maintenance-chat-composer { padding: 12px; }
   .maintenance-chat .maintenance-console-answer input { width: 0; }
 }
+.maintenance-rail-stack { display: grid; gap: 6px; flex: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid #e7eaf0; font-size: 12px; }
+.maintenance-rail-stack h3 { margin: 0; }
+.maintenance-rail-stack p { margin: 0; }
+.maintenance-rail-commit { display: block; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.maintenance-rail-badge.good { color: #176b3a; }
+.maintenance-rail-badge.bad { color: #b3261e; }
+.maintenance-rail-tokens { color: #5b6573; }
 .maintenance-console-host { flex: none; height: clamp(230px, 44dvh, 520px); }
 .maintenance-live-console { flex: none; min-height: 0; }
 
