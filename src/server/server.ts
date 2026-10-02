@@ -1,5 +1,5 @@
 import { askWork, workChatModel } from './work-chat.js';
-import { FALLBACK_PROVIDERS } from './queue.js';
+import { stationFallback } from './queue.js';
 import http from 'node:http';
 import https from 'node:https';
 import { randomBytes } from 'node:crypto';
@@ -38,7 +38,7 @@ import { RELAY_LOGIN, relayRequest, relayUpgrade, signInPage, stoppedPage, tunne
 import { ChatLog } from './history.js';
 import { Arcade, HighScores } from './cabinet.js';
 import type { ChatLine, ClientMsg, FloorInfo, FloorView, Me, MeetingRequest, PeerInfo, SearchResults, ServerMsg, ServicesState, SignInKind, WorkerInfo } from '../shared/protocol.js';
-import { GH_COMMENT_MAX, GH_LABEL_MAX, isAgentEffort, isAgentProvider, type AgentChoice } from '../shared/protocol.js';
+import { GH_COMMENT_MAX, GH_LABEL_MAX, fullPlanWindow, isAgentEffort, isAgentProvider, type AgentChoice } from '../shared/protocol.js';
 import { DESK_BY_ID, MAINTENANCE_DESK, PRODUCT_DESK, elevatorSpot, nextFreeSeat, streetBelow } from '../shared/layout.js';
 import { OFFICE_MAP, seatHereOn } from '../shared/maps/index.js';
 import { EMPTY_PLAN } from '../shared/floorplan.js';
@@ -722,8 +722,7 @@ export async function startServer(cfg: Config) {
     ledger,
     capacity: machine,
     providerDepleted: (provider) => {
-      const state = provider === 'claude' ? limits.state : provider === 'codex' ? codexLimits.state : undefined;
-      const full = state?.windows.find((w) => w.pct >= 100 && (w.resetsAt === undefined || w.resetsAt > Date.now()));
+      const full = fullPlanWindow(provider === 'claude' ? limits.state : provider === 'codex' ? codexLimits.state : undefined);
       return full ? `${full.label} is 100% used` : undefined;
     },
     prompts,
@@ -2125,20 +2124,17 @@ export async function startServer(cfg: Config) {
             if (maintenance) prompt = maintenanceImages.prompt(prompt, images);
             const stationChat = maintenanceIssue && maintenance ? { ...chat, newConversation: true, thread: undefined } : chat;
             // No provider chosen and the one it would run on has used up its plan: move to another metered provider with room.
+            // That includes an agent already sitting there, busy or not: stuck on a spent plan, it can't get any further.
             if (!pick) {
               const there = target.workers.list().find((w) => w.deskId === deskId);
-              const idle = !there || ['idle', 'done', 'exited'].includes(there.status);
               const wanted = stationChat?.newConversation || !there ? target.workers.officeDefault.provider : there.provider ?? target.workers.officeDefault.provider;
-              const why = idle ? floorContext.providerDepleted(wanted) : undefined;
-              if (why) {
-                const other = FALLBACK_PROVIDERS.find((p) => p !== wanted && floor.project.agentProviders.includes(p) && !floorContext.providerDepleted(p));
-                if (other) {
-                  pick = { provider: other };
-                  toastFloor(floor, `🛠️ ${wanted} is out of usage (${why}): the ${deskId === MAINTENANCE_DESK ? 'Maintenance agent' : 'station agent'} switches to ${other}`, 'warn');
-                }
+              const fallback = stationFallback(wanted, floor.project.agentProviders, (p) => floorContext.providerDepleted(p));
+              if (fallback) {
+                pick = { provider: fallback.to };
+                toastFloor(floor, `🛠️ ${wanted} is out of usage (${fallback.why}): the ${deskId === MAINTENANCE_DESK ? 'Maintenance agent' : deskId === PRODUCT_DESK ? 'Product Lead' : 'station agent'} switches to ${fallback.to}`, 'warn');
               }
             }
-            const hires = stationChat?.newConversation ||!target.workers.deskOccupied(deskId) || target.workers.stationSwitches(deskId, pick);
+            const hires = stationChat?.newConversation || !target.workers.deskOccupied(deskId) || target.workers.stationSwitches(deskId, pick);
             const signIn = hires ? claudeFor(pick?.provider ?? target.workers.officeDefault.provider) : undefined;
             if (signIn && c.accountId && !signins.claudeReady(c.accountId)) {
               await signins.look(c.accountId, true);

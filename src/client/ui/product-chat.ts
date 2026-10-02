@@ -1,4 +1,5 @@
 import type { ClientMsg, MaintenanceChatMessage, MaintenanceChatState, ServerMsg, WorkerInfo } from '../../shared/protocol';
+import { fullPlanWindow } from '../../shared/protocol';
 import { PRODUCT_DESK } from '../../shared/layout';
 import { store } from '../state';
 import { h, openModal } from './dom';
@@ -108,6 +109,8 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
     model.repaint();
     const archived = !newConversation && !!selected && selected !== worker?.id;
     const waiting = worker?.status === 'needs_input';
+    // Stuck on a provider whose plan is used up, a message moves it to one with room (the server picks it).
+    const spent = !!worker && !!fullPlanWindow(worker.provider === 'claude' ? store.limits : worker.provider === 'codex' ? store.codexLimits : undefined);
     const busy = !!worker && !['idle', 'done', 'exited'].includes(worker.status);
     status.textContent = worker ? (worker.status === 'working' ? 'thinking…' : waiting ? 'waiting on you' : worker.status === 'starting' ? 'getting settled…' : 'here') : 'here whenever you want to talk';
     const activeTitle = newConversation ? 'New conversation' : state?.conversations.find(c => c.id === (selected ?? worker?.id))?.title ?? '';
@@ -115,7 +118,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
     terminal.disabled = !worker;
     create.disabled = !!pending;
     input.disabled = !!pending || archived || !state || historyFailed;
-    submit.disabled = input.disabled || (waiting && !model.edited()) || (newConversation && busy);
+    submit.disabled = input.disabled || (waiting && !model.edited() && !spent) || (newConversation && busy);
     note.textContent = newConversation ? (busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'A fresh start: the earlier conversations stay in the list.')
       : archived ? 'An earlier conversation, read-only. Choose Current conversation to carry on talking.'
       : waiting ? 'The Product Lead is waiting for an answer or an approval. Open its terminal to respond.'

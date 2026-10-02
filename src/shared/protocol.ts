@@ -308,6 +308,11 @@ export interface PlanLimits {
   at: number;
 }
 
+/** A plan window that is used up and hasn't reset yet: while there is one, that provider can't do any work. */
+export function fullPlanWindow(limits: PlanLimits | undefined, now = Date.now()): PlanWindow | undefined {
+  return limits?.windows.find((w) => w.pct >= 100 && (w.resetsAt === undefined || w.resetsAt > now));
+}
+
 /** What becomes of a worker's git worktree when it is sent home. */
 export type WorktreeCleanup = 'keep' | 'worktree' | 'all';
 

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { TaskQueue, type QueueWorkers } from '../src/server/queue.js';
-import type { AgentEffort, AgentProvider, WorkerInfo } from '../src/shared/protocol.js';
+import { TaskQueue, stationFallback, type QueueWorkers } from '../src/server/queue.js';
+import { fullPlanWindow, type AgentEffort, type AgentProvider, type PlanLimits, type WorkerInfo } from '../src/shared/protocol.js';
 
 function fixture(defaultProvider: AgentProvider = 'claude') {
   const dir = mkdtempSync(path.join(tmpdir(), 'office-queue-'));
@@ -434,4 +434,20 @@ test('a task whose provider is out of usage is seated on one that still has some
   assert.equal(q.state().tasks[1].status, 'queued');
   f.depleted.delete('codex'); q.pump();
   assert.equal(f.workers[1].provider, 'codex');
+});
+
+test('a station agent on a spent plan moves to the first other metered provider with room', () => {
+  const spent = (...ps: AgentProvider[]) => (p: AgentProvider) => (ps.includes(p) ? 'Session is 100% used' : undefined);
+  assert.equal(stationFallback('claude', ['claude', 'codex'], spent()), undefined);
+  assert.deepEqual(stationFallback('codex', ['claude', 'codex'], spent('codex')), { to: 'claude', why: 'Session is 100% used' });
+  assert.equal(stationFallback('codex', ['claude', 'codex'], spent('codex', 'claude')), undefined);
+  assert.equal(stationFallback('codex', ['codex', 'opencode'], spent('codex')), undefined);
+});
+
+test('a plan window is full until it resets', () => {
+  const win = (pct: number, resetsAt?: number): PlanLimits => ({ windows: [{ label: 'Session', pct, resetsAt }], at: 1 }) as PlanLimits;
+  assert.equal(fullPlanWindow(win(99)), undefined);
+  assert.equal(fullPlanWindow(win(100))?.label, 'Session');
+  assert.equal(fullPlanWindow(win(100, 500), 1000), undefined);
+  assert.equal(fullPlanWindow(undefined), undefined);
 });

@@ -46,6 +46,17 @@ export interface QueueEvents {
 /** Where a task goes when its provider's plan is used up: the first of these with room. Only metered providers qualify. */
 export const FALLBACK_PROVIDERS: readonly AgentProvider[] = ['claude', 'codex'];
 
+/**
+ * For a station agent (Maintenance, Product Lead, a wall kiosk) asked something on `wanted`: when that
+ * provider's plan is used up, the first other metered provider this project offers that still has room.
+ */
+export function stationFallback(wanted: AgentProvider, offered: readonly AgentProvider[], depleted: (p: AgentProvider) => string | undefined): { to: AgentProvider; why: string } | undefined {
+  const why = depleted(wanted);
+  if (!why) return undefined;
+  const to = FALLBACK_PROVIDERS.find((p) => p !== wanted && offered.includes(p) && !depleted(p));
+  return to ? { to, why } : undefined;
+}
+
 export const DEFAULT_MAX_WORKERS = 3;
 const MAX_TASKS = 100;
 const PUMP_MS = 10_000;

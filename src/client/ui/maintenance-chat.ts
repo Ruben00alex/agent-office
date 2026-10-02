@@ -1,5 +1,5 @@
 import type { ClientMsg, MaintenanceAttachment, MaintenanceChatMessage, MaintenanceChatState, MaintenanceWorkItem, ServerMsg } from '../../shared/protocol';
-import { fmtTokens, tokensOf } from '../../shared/protocol';
+import { fmtTokens, fullPlanWindow, tokensOf } from '../../shared/protocol';
 import { store } from '../state';
 import { h, openModal } from './dom';
 import { markdown } from './markdown';
@@ -259,6 +259,8 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     model.repaint();
     const archived = !newConversation && !!selected && selected !== worker?.id;
     const waiting = worker?.status === 'needs_input';
+    // Stuck on a provider whose plan is used up, a message moves it to one with room (the server picks it).
+    const spent = !!worker && !!fullPlanWindow(worker.provider === 'claude' ? store.limits : worker.provider === 'codex' ? store.codexLimits : undefined);
     status.textContent = worker ? `${worker.status.replace(/_/g, ' ')}${state?.floorName ? ` · ${state.floorName}` : ''}` : 'Ready for your first request';
     const activeId = newConversation ? undefined : selected ?? worker?.id;
     const activeTitle = newConversation ? 'New conversation' : state?.conversations.find(c => c.id === activeId)?.title ?? '';
@@ -270,7 +272,7 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     input.disabled = !!pending || archived || !state || !!historyFailed;
     images.disable(input.disabled);
     // Stuck on a question it can't get past, it can still be moved onto another model.
-    submit.disabled = input.disabled || images.uploading || (waiting && !model.edited()) || (newConversation && busy) || state?.stack?.phase === 'shipping' || state?.stack?.validation?.phase === 'running';
+    submit.disabled = input.disabled || images.uploading || (waiting && !model.edited() && !spent) || (newConversation && busy) || state?.stack?.phase === 'shipping' || state?.stack?.validation?.phase === 'running';
     note.textContent = newConversation ? (busy ? 'Wait for the current issue to finish before starting a new conversation.' : 'New issue · starts a fresh conversation and keeps the previous history.') : archived ? 'Archived conversation · choose Current conversation to send a new request.'
       : waiting ? 'Maintenance needs an answer or approval. Respond in the live console beside this conversation.'
       : state && !state.richReplies ? 'This provider uses the terminal for replies. Requests are still archived.'
