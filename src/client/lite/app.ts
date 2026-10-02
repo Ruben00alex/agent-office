@@ -143,6 +143,7 @@ export function startRouter() {
           type: 'button',
           id: `tab-${t.id}`,
           'aria-label': t.label,
+          title: t.label,
           onclick: () => {
             const to = lastIn.get(t.id) ?? t.id;
             // Tapping the tab you're on goes back to its front page.
@@ -157,6 +158,37 @@ export function startRouter() {
   );
   window.addEventListener('hashchange', render);
   render();
+  foldableSidebar();
+}
+
+/** The desktop sidebar folds down to its icons, giving the page the width; the choice is remembered in this browser. */
+function foldableSidebar() {
+  const key = 'agent-office.lite-sidebar-folded';
+  const button = $('lite-fold');
+  const set = (folded: boolean) => {
+    document.body.dataset.nav = folded ? 'folded' : 'open';
+    const label = folded ? 'Expand sidebar' : 'Collapse sidebar';
+    button.setAttribute('aria-expanded', String(!folded));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.textContent = folded ? '»' : '«';
+  };
+  let folded = false;
+  try {
+    folded = localStorage.getItem(key) === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  set(folded);
+  button.addEventListener('click', () => {
+    folded = !folded;
+    set(folded);
+    try {
+      localStorage.setItem(key, folded ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+  });
 }
 
 /** Re-render the page you're on (after the first welcome, say). */

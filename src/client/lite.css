@@ -298,6 +298,13 @@ body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-i
 /* Chat: the messages get the screen. */
 .lp-chatscroll { gap: 2px; padding: 4px 2px 10px; }
 .lp-top-slim { gap: 0; }
+/* Maintenance's Work view: its backlog controls sit in the fixed top, and only the issue list under them scrolls. */
+.lp-workhead { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
+.lp-workhead .maintenance-section-heading { flex-wrap: wrap; margin: 0; }
+.lp-workhead .maintenance-section-heading > div { flex: 1 1 180px; min-width: 0; }
+.lp-workhead .maintenance-work-intro { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 12px; }
+.lp-workhead .maintenance-work-intro p { flex: 1 1 240px; margin: 0; }
+@media (max-width: 959px), (max-height: 640px) { .lp-workhead .maintenance-work-intro p { display: none; } }
 .lp-chatlog { display: flex; flex-direction: column; gap: 2px; }
 .lp-msg { display: flex; flex-direction: column; max-width: 88%; margin-top: 2px; }
 .lp-msg.first { margin-top: 10px; }
@@ -348,6 +355,18 @@ body[data-root="0"] .lite-main:has(> .lp-fill) { padding-bottom: env(safe-area-i
   .lite-tab.on { background: #e8edf9; color: #3b5293; font-weight: 600; }
   .lite-tab .n { position: static; margin-left: auto; }
   .lite-tab:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+  /* Folded (the « by the office's name), the sidebar keeps just its icons and the page gets the width. */
+  .lite-fold { flex: none; display: grid; place-items: center; width: 30px; height: 30px; margin-left: auto; padding: 0; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 17px; line-height: 1; cursor: pointer; }
+  .lite-fold:hover { background: var(--paper-2); border-color: var(--line-2); color: var(--ink); }
+  .lite-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  body.lite[data-nav=folded] { grid-template-columns: 64px minmax(0, 1fr); }
+  body.lite[data-nav=folded] .lite-brand { justify-content: center; padding: 0; }
+  body.lite[data-nav=folded] .lite-brand > :not(.lite-fold) { display: none; }
+  body.lite[data-nav=folded] .lite-fold { margin: 0; }
+  body.lite[data-nav=folded][data-root] .lite-nav { padding: 14px 8px; }
+  body.lite[data-nav=folded] .lite-tab { position: relative; justify-content: center; padding: 6px 0; }
+  body.lite[data-nav=folded] .lite-tab .lbl { display: none; }
+  body.lite[data-nav=folded] .lite-tab .n { position: absolute; top: 0; right: 2px; margin: 0; }
 
   /* Pages: menus of rows and lists of cards fill the width in columns; headings, notes and forms span it. */
   .lp:not(.lp-fill) { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); align-items: start; gap: 12px; max-width: 1400px; margin: 0 auto; }

@@ -12,7 +12,7 @@ import { providerPicker, workerChoice } from '../ui/provider';
 import { maintenanceContent } from '../ui/maintenance-chat';
 import { maintenanceJson } from '../ui/maintenance-board';
 import { imageComposer, imageEvidence } from '../ui/maintenance-images';
-import { openMaintenanceIssueCreate, workPanel } from '../ui/maintenance-work';
+import { openMaintenanceIssueCreate, workPanelParts } from '../ui/maintenance-work';
 import { renderDiff } from '../ui/changes';
 import { go, live, setSubtitle, type Screen } from './app';
 import { actions, button, empty, fill, heading, iconButton, layout, note, openSheet, page, row, searchBox, segmented, textarea } from './kit';
@@ -189,13 +189,15 @@ export function agentChatScreen([kind]: string[]): Screen {
   model.element.addEventListener('click', () => setTimeout(controls));
   const form = h('form.lp-compose', {}, attach, input, sendBtn);
   const subview = h('div.lp-subview.hidden');
+  // The Work view's controls (add, refresh, start next) stay above its issue list instead of scrolling away with it.
+  const workHead = h('div.lp-workhead.hidden');
   const tabs = h('div');
   const conversationActions = actions(
     button('🧭 All agents', () => go('agents')),
     ...(maintenance ? [] : [button('🕘 History', openHistory)]),
   );
   const jump = h('button.lp-jump.hidden', { type: 'button', 'aria-label': 'Jump to the latest message', onclick: () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }) }, '↓');
-  const frame = layout({ top: [tabs, conversationActions], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
+  const frame = layout({ top: [tabs, conversationActions, workHead], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
   const el = frame.el;
   const scroller = frame.scroller;
   frame.top.classList.add('lp-top-slim');
@@ -274,6 +276,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     list.classList.toggle('hidden', !chat);
     typing.classList.toggle('hidden', !chat || !typingNow());
     subview.classList.toggle('hidden', chat);
+    workHead.classList.toggle('hidden', view !== 'work');
     frame.bottom.classList.toggle('hidden', !chat);
     if (!chat) jump.classList.add('hidden');
     if (maintenance) {
@@ -286,7 +289,16 @@ export function agentChatScreen([kind]: string[]): Screen {
             { id: 'review', label: '🚀 Review', count: store.maintenance.changes.length },
           ],
           view,
-          (v) => ((view = maintenanceView = v), paintFrame(), paintView()),
+          (v) => {
+            const wasChat = view === 'chat';
+            view = maintenanceView = v;
+            paintFrame();
+            paintView();
+            // The conversation opens at its latest message; Work and Review open at their top.
+            if (wasChat === (v === 'chat')) return;
+            if (v === 'chat') toBottom();
+            else scroller.scrollTop = 0;
+          },
         ),
       );
     }
@@ -344,23 +356,22 @@ export function agentChatScreen([kind]: string[]): Screen {
   function paintView() {
     if (!maintenance || !state || view === 'chat') return;
     if (view === 'work') {
-      fill(
-        subview,
-        workPanel(
-          state,
-          (m) => net.send(m),
-          (item: MaintenanceWorkItem) => startIssue(item),
-          (context) => ((carryDraft = context ? `${context}\n\n` : ''), (view = maintenanceView = 'chat'), (input.value = carryDraft || input.value), (carryDraft = ''), paintFrame(), input.focus()),
-          () => {
-            net.send({ t: 'maintenance.issues' });
-            void refresh();
-          },
-          (id) => {
-            view = maintenanceView = 'chat';
-            pick(id);
-          },
-        ),
+      const parts = workPanelParts(
+        state,
+        (m) => net.send(m),
+        (item: MaintenanceWorkItem) => startIssue(item),
+        (context) => ((carryDraft = context ? `${context}\n\n` : ''), (view = maintenanceView = 'chat'), (input.value = carryDraft || input.value), (carryDraft = ''), paintFrame(), input.focus()),
+        () => {
+          net.send({ t: 'maintenance.issues' });
+          void refresh();
+        },
+        (id) => {
+          view = maintenanceView = 'chat';
+          pick(id);
+        },
       );
+      fill(workHead, parts.head);
+      fill(subview, parts.list);
       return;
     }
     const stack = state.stack ?? store.maintenance;

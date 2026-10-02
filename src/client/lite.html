@@ -11,7 +11,11 @@
   <body class="lite">
     <!-- The 2D view (lite.ts): the office as an app, one page at a time (lite/). On a phone the tabs run
          along the bottom; on a wide window they're a sidebar on the left, under the office's name. -->
-    <div class="lite-brand" aria-hidden="true"><span class="ico">🏢</span><b>Agent Office</b></div>
+    <div class="lite-brand">
+      <span class="ico" aria-hidden="true">🏢</span><b aria-hidden="true">Agent Office</b>
+      <!-- On a wide window the sidebar folds down to its icons, and stays that way (app.ts). -->
+      <button id="lite-fold" class="lite-fold" type="button" aria-controls="lite-tabs" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar">«</button>
+    </div>
     <header class="lite-bar">
       <button id="lite-back" class="btn lp-icon lite-back hidden" type="button" aria-label="Back">←</button>
       <div class="lite-heading">
