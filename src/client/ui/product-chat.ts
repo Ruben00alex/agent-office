@@ -2,7 +2,7 @@ import type { ClientMsg, MaintenanceChatMessage, MaintenanceChatState, ServerMsg
 import { PRODUCT_DESK } from '../../shared/layout';
 import { store } from '../state';
 import { h, openModal } from './dom';
-import { maintenanceContent } from './maintenance-chat';
+import { maintenanceContent, marqueeTitle } from './maintenance-chat';
 import { generateTitleButton, maintenanceJson } from './maintenance-board';
 import { providerPicker, workerChoice } from './provider';
 
@@ -45,6 +45,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
   const archive = h('div.maintenance-chat-archive');
   const list = h('div.maintenance-chat-messages', { role: 'log', 'aria-label': 'Conversation with the Product Lead', 'aria-live': 'polite', 'aria-relevant': 'additions' });
   const status = h('span.maintenance-chat-status', {}, 'Connecting…');
+  const conversationTitle = h('div.maintenance-chat-title');
   const error = h('p.maintenance-chat-error.hidden', { role: 'alert' });
   const note = h('p.maintenance-composer-note');
   const input = h('textarea', { rows: 2, maxlength: 20000, placeholder: 'What’s on your mind about the project?', 'aria-label': 'Message to the Product Lead' });
@@ -63,6 +64,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
   const close = h('button.close', { type: 'button', 'aria-label': 'Close Product Lead chat' }, '✕');
   const el = h('div.modal.maintenance-chat.product-chat', { role: 'dialog', 'aria-label': 'Chat with the Product Lead' },
     h('header', {}, h('div', {}, h('span.maintenance-experiment', {}, 'AGENT OFFICE · PRODUCT'), h('h2', {}, '🧭 Product Lead'), status),
+      conversationTitle,
       h('div.maintenance-chat-tools', {}, retitle, terminal, close)),
     h('div.maintenance-chat-layout', {},
       h('aside', {}, create, current, h('h3', {}, 'Past conversations'), h('small', {}, 'Shared with everyone on this floor'), search, archive),
@@ -87,7 +89,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
     archive.replaceChildren(...entries.map(c => h('button.maintenance-conversation', {
       type: 'button', class: active === c.id ? 'selected' : '', 'aria-pressed': String(active === c.id),
       onclick: () => { saveDraft(); newConversation = false; selected = c.id; loadedDraft = ''; messages = []; messageKey = ''; void refresh(); },
-    }, h('b', {}, c.title), h('small', {}, `${new Date(c.updatedAt).toLocaleDateString()} · ${c.count} messages`))),
+    }, marqueeTitle(c.title), h('small', {}, `${new Date(c.updatedAt).toLocaleDateString()} · ${c.count} messages`))),
     ...(!entries.length ? [h('p.maintenance-archive-empty', {}, q ? 'No matching conversations' : 'Conversations appear here once you start talking.')] : []));
   }
   search.addEventListener('input', drawArchive);
@@ -108,6 +110,8 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
     const waiting = worker?.status === 'needs_input';
     const busy = !!worker && !['idle', 'done', 'exited'].includes(worker.status);
     status.textContent = worker ? (worker.status === 'working' ? 'thinking…' : waiting ? 'waiting on you' : worker.status === 'starting' ? 'getting settled…' : 'here') : 'here whenever you want to talk';
+    const activeTitle = newConversation ? 'New conversation' : state?.conversations.find(c => c.id === (selected ?? worker?.id))?.title ?? '';
+    if (conversationTitle.title !== activeTitle) { conversationTitle.title = activeTitle; conversationTitle.textContent = activeTitle; }
     terminal.disabled = !worker;
     create.disabled = !!pending;
     input.disabled = !!pending || archived || !state || historyFailed;
