@@ -216,6 +216,12 @@ export interface WorkerEvents {
   toast(text: string, level: 'info' | 'warn' | 'error'): void;
 }
 
+/** The Office TV brief goes only to desk workers, not to station agents (maintenance and the board agents). */
+function tvBrief(info: WorkerInfo): string {
+  if (info.kind !== 'agent' || DESK_BY_ID.get(info.deskId)?.station) return '';
+  return '\n\n' + presentationBrief(info.id);
+}
+
 export class WorkerManager {
   private workers = new Map<string, Worker>();
   private chatReaders = new WeakMap<Worker, MaintenanceTranscriptReader>();
@@ -995,7 +1001,7 @@ export class WorkerManager {
       const clean = text.replace(/\r\n?/g, '\n').trim();
       if (!clean) return 'Empty prompt';
       this.recordMaintenanceRequest(w, clean, by);
-      w.dsh.prompt(clean + (w.info.kind === 'agent' ? '\n\n' + presentationBrief(id) : ''));
+      w.dsh.prompt(clean + tvBrief(w.info));
       w.info.activity = truncate(clean, 80);
       this.notePrompt(w, clean);
       if (by) w.info.lastInput = { by, at: Date.now() };
@@ -1007,7 +1013,7 @@ export class WorkerManager {
     if (!clean) return 'Empty prompt';
     this.recordMaintenanceRequest(w, clean, by);
     // Bracketed paste keeps multi-line prompts in one message, then Enter submits.
-    const sent = clean + (w.info.kind === 'agent' ? '\n\n' + presentationBrief(id) : '');
+    const sent = clean + tvBrief(w.info);
     w.pty.write(`\x1b[200~${sent}\x1b[201~`);
     setTimeout(() => w.pty?.write('\r'), 120);
     w.info.activity = truncate(clean, 80);
@@ -1629,7 +1635,7 @@ export class WorkerManager {
 
   private launch(w: Worker, prompt: string | undefined, resumeSessionId: string | undefined) {
     const { info } = w;
-    if (prompt && info.kind === 'agent') prompt += '\n\n' + presentationBrief(info.id);
+    if (prompt) prompt += tvBrief(info);
     // Its folder was deleted meanwhile: it waits, marked lost, for someone to rebuild it or send it home.
     if (this.checkLost(w)) {
       clockWork(info, 'exited');
