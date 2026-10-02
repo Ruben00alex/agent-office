@@ -17,6 +17,8 @@ export interface WorkerRow {
   kind: 'agent' | 'shell';
   provider?: AgentProvider;
   model?: string;
+  /** Hired as the Product Lead, who talks and files issues instead of coding. */
+  role?: WorkerInfo['role'];
   desk: string;
   status: WorkerStatus;
   /** The board it stands by, for a board agent ("PR agent"). */
@@ -75,6 +77,7 @@ export function workerRow(w: WorkerInfo, view: PullsView, me?: string): WorkerRo
     kind: w.kind,
     ...(w.provider ? { provider: w.provider } : {}),
     ...(w.model ? { model: w.model } : {}),
+    ...(w.role ? { role: w.role } : {}),
     desk: seat?.label ?? w.deskId,
     status: w.status,
     ...(seat?.station ? { board: STATION_AGENT[seat.station].name } : {}),

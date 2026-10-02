@@ -32,6 +32,15 @@ export type WorkerKind = 'agent' | 'shell';
  */
 export type WorkerAction = 'read' | 'edit' | 'test' | 'web' | 'failing';
 
+/** A desk worker's role besides writing code: the Product Lead thinks through the project, answers questions and files issues. */
+export type WorkerRole = 'product-lead';
+export const WORKER_ROLES: Record<WorkerRole, { name: string; color: string }> = {
+  'product-lead': { name: 'Product Lead', color: '#e76f51' },
+};
+export function isWorkerRole(value: unknown): value is WorkerRole {
+  return value === 'product-lead';
+}
+
 export type AgentProvider = 'claude' | 'opencode' | 'codex' | 'grok' | 'muse' | 'dsh' | 'custom';
 
 export function isAgentProvider(value: unknown): value is AgentProvider {
@@ -195,6 +204,8 @@ export interface WorkerInfo {
   workingSince?: number;
   /** Sent out by a map's herald (the castle's Hand of the King), so every browser has it run to its seat from beside them. */
   via?: 'herald';
+  /** A desk worker hired for a role instead of coding (see WORKER_ROLES): it's told the role's brief ahead of its first message. */
+  role?: WorkerRole;
 }
 
 /** Where the branch of a worker whose worktree was deleted still is (see WorkerInfo.lost). */
@@ -1211,7 +1222,7 @@ export type ClientMsg =
   | { t: 'profile'; name: string; color: string; look: Look }
   /** With `issue`, the worker is there for that GitHub issue: it's assigned on GitHub (so it moves to In progress) and taken off the queue. */
   /** With `repos` (other floors' ids), the worker works in their repositories too, each in a worktree of its own (see WorkerInfo.repos). */
-  | { t: 'worker.spawn'; deskId: string; prompt?: string; worktree?: boolean; kind?: WorkerKind; provider?: AgentProvider; model?: string; effort?: AgentEffort; issue?: number; repos?: string[]; via?: 'herald' }
+  | { t: 'worker.spawn'; deskId: string; prompt?: string; worktree?: boolean; kind?: WorkerKind; provider?: AgentProvider; model?: string; effort?: AgentEffort; issue?: number; repos?: string[]; via?: 'herald'; role?: WorkerRole }
   | { t: 'worker.resume'; workerId: string }
   | { t: 'worker.kill'; workerId: string; cleanup?: WorktreeCleanup }
   /** Asks what the worker's worktree holds; answered with a `worker.worktree` message. */

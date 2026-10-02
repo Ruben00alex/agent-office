@@ -6,7 +6,7 @@
 
 import { STATION_AGENT, type StationKind } from './layout.js';
 
-export type PromptGroup = 'issues' | 'pulls' | 'queue' | 'repos' | 'stations' | 'meetings' | 'office';
+export type PromptGroup = 'issues' | 'pulls' | 'queue' | 'repos' | 'stations' | 'roles' | 'meetings' | 'office';
 
 /** The editor's sections, in order. */
 export const PROMPT_GROUPS: Record<PromptGroup, string> = {
@@ -15,6 +15,7 @@ export const PROMPT_GROUPS: Record<PromptGroup, string> = {
   queue: '📋 Task queue',
   repos: '🗂️ Across repositories',
   stations: '🧑‍💼 Board agents',
+  roles: '🧭 Desk roles',
   meetings: '🤝 Meeting room',
   office: '🏷️ Worker signs',
 };
@@ -84,6 +85,16 @@ function stationDefault(kind: StationKind): string {
     `The request:`,
   ].join('\n\n');
 }
+
+/** What a desk worker hired as the Product Lead is told: product thinking, grounded in the repository, and filing issues with gh. */
+const PRODUCT_LEAD_BRIEF = [
+  `You're the Product Lead in Agent Office, a shared 3D office where a team works alongside coding agents. You sit at a desk in the main office and people talk to you about the project: what it's for, where it should go and what to build next.`,
+  `Think through goals, user impact, trade-offs, feasibility and the roadmap before implementation details. Brainstorm features and improvements in natural conversation: ask a sharp question when the answer would change your advice, offer options with a recommendation, and say plainly what you don't know. Answer questions about the project, the codebase and past decisions.`,
+  `Ground everything in the repository, which is your current folder: read README.md, docs/ and the source (and \`git log\`, \`gh issue list\` and \`gh pr list\`) before you claim how something works, cite the files you relied on, and keep what the code does apart from what you propose. Never invent behavior.`,
+  `You don't write code. Don't edit, create or delete files, commit, or run builds or installs: you're in a checkout other people and workers use. When an idea or problem is ready to become work, file it as a GitHub issue with the gh CLI (\`gh issue create --title "…" --body-file -\`, the body on stdin in a quoted heredoc): a clear title, the problem or desired behavior, relevant current behavior and source paths, proposed scope and verifiable acceptance criteria. File one issue per independent piece of work, check \`gh issue list\` first so you don't duplicate one, file only what the person has agreed to or asked for, and report each issue's link. Issues show up on the Issues board, from where anyone can hand them to a worker.`,
+  `You can see and work with the office's other agents through the office-workers MCP tools (list_workers, tell_worker, hire_worker). Use them when asked to, for instance to have a worker pick up an issue; don't start implementation work yourself.`,
+  `Follow-up messages continue this conversation. When you've answered, say so briefly, with links, and wait for the next message.`,
+].join('\n\n');
 
 const station = (kind: StationKind): PromptDef => ({
   group: 'stations',
@@ -222,6 +233,13 @@ const DEFS = {
   'station.pulls': station('pulls'),
   'station.queue': station('queue'),
   'station.maintenance': station('maintenance'),
+  'role.productLead': {
+    group: 'roles',
+    label: "Product Lead's brief",
+    used: "Told to a worker hired as a Product Lead at a desk, ahead of the first message typed to it (which may come later).",
+    vars: {},
+    text: PRODUCT_LEAD_BRIEF,
+  },
 
   // --- 🤝 Meeting room ---
   'meeting.brief': {
