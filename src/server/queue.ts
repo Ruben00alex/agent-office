@@ -33,6 +33,8 @@ export interface QueueEvents {
   hiringPaused(): string | undefined;
   /** How many more workers the office has room for under its worker limit (Infinity without one). */
   room?(): number;
+  /** The worker limits are switched off in ⚙️ Settings: the queue's own limit doesn't hold it either. */
+  limitsOff?(): boolean;
   /** The last task on the queue just finished, done: nothing is left queued or running. */
   emptied(): void;
   /** What's added after a task that runs in its own worktree ('queue.worktree' in shared/prompts.ts); empty for nothing. */
@@ -315,7 +317,7 @@ export class TaskQueue {
     let changed = false;
     for (const t of this.tasks) {
       if (t.status !== 'queued') continue;
-      if (this.busy() >= this.maxWorkers) break;
+      if (!this.events.limitsOff?.() && this.busy() >= this.maxWorkers) break;
       // A spent budget holds the queue instead of failing every task; the pump seats them once hiring resumes.
       if (this.events.hiringPaused()) break;
       // So does an office at its worker limit (--max-workers), unless an eligible finished

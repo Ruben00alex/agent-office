@@ -630,6 +630,8 @@ export interface MachineState {
   workers: number;
   /** The most workers the office takes; missing when there's no limit. */
   limit?: number;
+  /** An admin switched the worker limits off in ⚙️ Settings: no office-wide limit and no queue limit. */
+  limitsOff?: boolean;
   /** --max-workers: the limit can't be set any higher from the office. */
   ceiling?: number;
   /** The limit someone set in ⚙️ Settings, when there is one. */
@@ -1294,6 +1296,8 @@ export type ClientMsg =
   | { t: 'notify.test' }
   /** Admins: the most workers the office runs at once, across every floor; null takes the limit off. */
   | { t: 'machine.limit'; limit: number | null }
+  /** Admins: switch the worker limits (the office's and the queue's) off or back on. */
+  | { t: 'machine.limitsOff'; off: boolean }
   | { t: 'voice'; voice: boolean; muted: boolean; sharing: boolean }
   | { t: 'rtc'; to: string; data: unknown }
   | { t: 'chat'; text: string }

@@ -249,6 +249,7 @@ export class Floor {
       refreshGitHub: () => void this.github.refresh(),
       hiringPaused: () => ctx.ledger.hiringPaused,
       room: () => ctx.capacity.room(),
+      limitsOff: () => ctx.capacity.limitsOff?.() ?? false,
       emptied: () => {
         ctx.toast(this, '📋 The queue is empty: every task is done 🎉');
         ctx.emit(this, { t: 'gong', why: 'queue' });

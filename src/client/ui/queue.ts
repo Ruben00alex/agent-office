@@ -147,8 +147,10 @@ export function openQueue(net: Net, actions: QueueActions) {
 
   const render = () => {
     const q = store.queue;
-    limitValue.textContent = q.maxWorkers === 0 ? 'Paused' : String(q.maxWorkers);
-    minus.toggleAttribute('disabled', q.maxWorkers <= 0);
+    const off = !!store.machine.limitsOff;
+    limitValue.textContent = off ? '⚠️ Limits disabled' : q.maxWorkers === 0 ? 'Paused' : String(q.maxWorkers);
+    minus.toggleAttribute('disabled', off || q.maxWorkers <= 0);
+    plus.toggleAttribute('disabled', off);
     const running = q.tasks.filter((t) => t.status === 'running');
     const queued = q.tasks.filter((t) => t.status === 'queued');
     const done = q.tasks.filter((t) => t.status === 'done').slice().reverse();
@@ -177,7 +179,7 @@ export function openQueue(net: Net, actions: QueueActions) {
   // The machine reports every few seconds; only a change to whether the office is full shows here.
   let full = '';
   const machineChanged = () => {
-    const k = `${officeFull(store.machine)}|${store.machine.limit}`;
+    const k = `${officeFull(store.machine)}|${store.machine.limit}|${store.machine.limitsOff}`;
     if (k === full) return;
     full = k;
     render();

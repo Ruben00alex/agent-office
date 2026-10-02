@@ -392,16 +392,23 @@ export function buildSettings(net: Net, settings: Settings, onChange: (s: Settin
   const limitSave = h('button.btn.primary', { type: 'button' }, 'Set limit');
   const limitClear = h('button.btn', { type: 'button' });
   const limitRow = h('div.webhook', {}, limitInput, limitSave, limitClear);
+  const limitsOffBtn = h('button.btn', { type: 'button' });
+  const limitsOffRow = h('div.webhook', {}, limitsOffBtn);
+  limitsOffBtn.addEventListener('click', () => net.send({ t: 'machine.limitsOff', off: !store.machine.limitsOff }));
   const limitNote = h('p.setting-note');
   const paintLimit = () => {
     const m = store.machine;
     const admin = store.me.admin;
-    limitRow.classList.toggle('hidden', !admin);
+    const off = !!m.limitsOff;
+    limitRow.classList.toggle('hidden', !admin || off);
+    limitsOffRow.classList.toggle('hidden', !admin);
+    limitsOffBtn.textContent = off ? 'Turn limits back on' : 'Disable limits';
     limitInput.placeholder = m.ceiling ? `1 to ${m.ceiling}` : 'e.g. 6';
     limitClear.textContent = m.ceiling ? `Back to ${m.ceiling}` : 'No limit';
     limitClear.classList.toggle('hidden', !m.set);
-    const now =
-      m.limit === undefined
+    const now = off
+      ? `⚠️ Limits disabled: no office-wide worker limit and no queue limit, so hiring and the queue are only held back by free seats. ${m.workers} ${m.workers === 1 ? 'is' : 'are'} here now. The machine monitor still warns when the CPU or memory is under pressure.`
+      : m.limit === undefined
         ? `No limit: the office hires a worker for every free seat. ${m.workers} ${m.workers === 1 ? 'is' : 'are'} here now, across every floor.`
         : `At most ${m.limit} worker${m.limit === 1 ? '' : 's'} at once, across every floor (${m.workers} now), shells and board agents too. Hiring past that is refused.`;
     const from = m.set ? ` Set by ${m.set.by} ${timeAgo(m.set.at)}.` : '';
@@ -553,7 +560,7 @@ export function buildSettings(net: Net, settings: Settings, onChange: (s: Settin
     ],
     workers: [
       setting('Default worker', 'office', agentNow, agent.element, agentActions, agentNote),
-      setting('Worker limit', 'office', limitRow, limitNote),
+      setting('Worker limit', 'office', limitRow, limitsOffRow, limitNote),
       setting('Workers whose pull request merged', 'office', leaveRow, leaveNote),
       setting('Prompts', 'office', promptsOpen, promptsNote),
     ],

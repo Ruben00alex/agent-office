@@ -659,8 +659,8 @@ export async function startServer(cfg: Config) {
   );
   machine.start();
   /** Queues everywhere may be waiting for room under the worker limit: let them look again. */
-  const pumpQueues = (except?: Floor) => {
-    if (machine.limit === undefined) return;
+  const pumpQueues = (except?: Floor, force = false) => {
+    if (machine.limit === undefined && !force) return;
     // Not right now: whoever freed the seat (a queue making room for its next task) takes it first.
     setImmediate(() => {
       for (const f of floors.values()) if (f !== except) f.queue.pump();
@@ -2516,6 +2516,13 @@ export async function startServer(cfg: Config) {
         const now = machine.limit;
         toastAll(limit !== undefined ? `⚙️ ${who} set the worker limit to ${now}` : now === undefined ? `⚙️ ${who} took the worker limit off` : `⚙️ ${who} put the worker limit back to ${now} (--max-workers)`);
         pumpQueues();
+        break;
+      }
+      case 'machine.limitsOff': {
+        if (!meOf(c.accountId).admin) return warn(c, 'Only admins can change the worker limits');
+        machine.setLimitsOff(msg.off === true);
+        toastAll(msg.off === true ? `⚠️ ${who} turned the worker limits off: the office and the queue take as many workers as there are seats` : `⚙️ ${who} turned the worker limits back on`);
+        pumpQueues(undefined, true);
         break;
       }
       case 'changes.watch': {

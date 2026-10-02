@@ -21,6 +21,8 @@ export interface Capacity {
   full(): string | undefined;
   /** How many more workers it has room for: Infinity with no limit, below 0 once it's over. */
   room(): number;
+  /** Whether the worker limits are switched off in ⚙️ Settings. */
+  limitsOff?(): boolean;
 }
 
 interface Saved {
@@ -70,6 +72,8 @@ function availableMemory(): Promise<number> {
  */
 export class Machine implements Capacity {
   private saved?: Saved;
+  /** ⚙️ Settings turned the worker limits off: no office-wide limit, and the queue runs as many tasks as it has seats. */
+  private off = false;
   private path: string;
   private timer?: NodeJS.Timeout;
   private last = cpuTimes();
@@ -106,9 +110,14 @@ export class Machine implements Capacity {
 
   /** The most workers the office takes, or undefined for no limit. */
   get limit(): number | undefined {
+    if (this.off) return undefined;
     const set = this.saved?.limit;
     if (set === undefined) return this.ceiling;
     return this.ceiling === undefined ? set : Math.min(set, this.ceiling);
+  }
+
+  limitsOff(): boolean {
+    return this.off;
   }
 
   room(): number {
@@ -122,6 +131,13 @@ export class Machine implements Capacity {
     return `The office is at its limit of ${limit} worker${limit === 1 ? '' : 's'} on this machine — send one home before hiring another`;
   }
 
+  setLimitsOff(off: boolean) {
+    if (off === this.off) return;
+    this.off = off;
+    this.persist();
+    this.emit();
+  }
+
   state(): MachineState {
     const memTotal = os.totalmem();
     return {
@@ -133,6 +149,7 @@ export class Machine implements Capacity {
       pressure: this.pressure(memTotal),
       workers: this.count(),
       limit: this.limit,
+      limitsOff: this.off || undefined,
       ceiling: this.ceiling,
       set: this.saved && { ...this.saved },
     };
@@ -192,6 +209,7 @@ export class Machine implements Capacity {
   private restore() {
     try {
       const s = JSON.parse(readFileSync(this.path, 'utf8')) as Partial<Saved>;
+      this.off = (s as { limitsOff?: unknown }).limitsOff === true;
       const limit = parseWorkerLimit(s.limit);
       if (limit !== undefined) this.saved = { limit, by: typeof s.by === 'string' ? s.by : 'someone', at: typeof s.at === 'number' ? s.at : 0 };
     } catch {
@@ -201,7 +219,7 @@ export class Machine implements Capacity {
 
   private persist() {
     try {
-      writeFileSync(this.path, JSON.stringify(this.saved ?? {}, null, 2), { mode: 0o600 });
+      writeFileSync(this.path, JSON.stringify({ ...this.saved, ...(this.off ? { limitsOff: true } : {}) }, null, 2), { mode: 0o600 });
     } catch {
       // disk issues shouldn't take the office down
     }
