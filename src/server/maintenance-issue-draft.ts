@@ -17,10 +17,13 @@ export function parseIssueDraft(answer: string): { title: string; body: string }
   return { title: value.title.trim(), body: value.body.trim() };
 }
 
-/** Strips a Markdown code fence some models wrap their JSON in. */
+/** Pulls the JSON object out of a reply, tolerating code fences and prose around it (haiku likes both). */
 function unfence(answer: string): string {
-  const m = answer.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return m ? m[1] : answer;
+  const text = answer.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  const inner = fenced ? fenced[1] : text;
+  const start = inner.indexOf('{'), end = inner.lastIndexOf('}');
+  return start >= 0 && end > start ? inner.slice(start, end + 1) : inner;
 }
 
 /** Drafts with Codex (gpt-6-luna), or with Claude Code (haiku) when Codex can't answer (out of usage, not installed). `writer` pins one of them. */
