@@ -9,26 +9,18 @@
     <link rel="stylesheet" href="./lite.css" />
   </head>
   <body class="lite">
-    <!-- The 2D view (lite.ts): the office without the 3D, for a phone or a computer the 3D is too much for. -->
+    <!-- The 2D view (lite.ts): the office as an app for a phone, one full-screen page at a time (lite/). -->
     <header class="lite-bar">
-      <label class="lite-floor" title="The floor you're on: pick another to see its workers">
-        <span class="lite-floor-label">Floor</span>
-        <select id="floor" aria-label="Floor"></select>
-      </label>
-      <a id="to-3d" class="btn" href="/?3d=1" title="The 3D office, where you walk around">🏢 3D</a>
+      <button id="lite-back" class="btn lite-back hidden" type="button" aria-label="Back">←</button>
+      <div class="lite-heading">
+        <h1 id="lite-title">Agent Office</h1>
+        <p id="lite-sub" class="lite-subtitle hidden"></p>
+      </div>
+      <div id="lite-actions" class="lite-actions"></div>
+      <div id="lite-global" class="lite-actions"><a id="to-3d" class="btn" href="/?3d=1" title="The 3D office, where you walk around" aria-label="The 3D office">3D</a></div>
     </header>
-    <main class="lite-main">
-      <p id="floor-meta" class="lite-meta"></p>
-      <div id="elsewhere" class="lite-elsewhere hidden"></div>
-      <h2 class="lite-h">Workers <span id="waiting-now" class="lite-waiting"></span></h2>
-      <ul id="workers" class="lite-workers"></ul>
-    </main>
-    <nav class="lite-nav" aria-label="Office">
-      <button id="btn-issues" class="btn" type="button">📌 Issues <span class="n"></span></button>
-      <button id="btn-pulls" class="btn" type="button">🔀 PRs <span class="n"></span></button>
-      <button id="btn-queue" class="btn" type="button">📋 Queue <span class="n"></span></button>
-      <button id="btn-new" class="btn primary" type="button">✨ New task</button>
-    </nav>
+    <main id="screen" class="lite-main"></main>
+    <nav id="lite-tabs" class="lite-nav" aria-label="Office"></nav>
     <div id="toasts"></div>
     <div id="conn" class="conn hidden">Reconnecting…</div>
     <div id="modal-root"></div>

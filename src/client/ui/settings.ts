@@ -46,7 +46,14 @@ const setting = (title: string, scope: Scope | null, ...body: Node[]) =>
 let lastPane: SettingsPane = 'you';
 
 /** `outside` describes the sky over the office (see describeSky), once the server has said. `first` opens on that category instead of the last one. */
-export function openSettings(net: Net, settings: Settings, onChange: (s: Settings) => void, onCharacter: () => void, previewSound: () => void, notifier: DesktopNotifier, onSignOut: () => void, outside?: { now: string; live: boolean }, first?: SettingsPane) {
+/**
+ * The settings themselves, to put in a window or on a page. `lite` leaves out what only matters in the
+ * 3D office (the camera, sound and voice), and `leave` runs before a button that opens another window.
+ */
+export function buildSettings(net: Net, settings: Settings, onChange: (s: Settings) => void, onCharacter: () => void, previewSound: () => void, notifier: DesktopNotifier, onSignOut: () => void, outside?: { now: string; live: boolean }, first?: SettingsPane, opts: { lite?: boolean; leave?: () => void } = {}): { body: HTMLElement; dispose: () => void } {
+  const lite = !!opts.lite;
+  const visiblePanes = PANES.filter((p) => !(lite && p.id === 'sound'));
+  if (lite && lastPane === 'sound') lastPane = 'you';
   const seg = h('div.seg', { role: 'radiogroup', 'aria-label': 'Camera view' });
   const note = h('p.setting-note');
   const paint = () => {
@@ -515,7 +522,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
       h('p.setting-note', {}, 'Manage GitHub issues, queued work, screenshots, the live agent console and stack review in one workspace. Turn this off to use the legacy stack/request view. Both views share the agent, history and stack.'))],
     you: [
       setting('Your character', null, character),
-      setting('Camera view', 'you', seg, note),
+      ...(lite ? [] : [setting('Camera view', 'you', seg, note)]),
       setting('Signed in', null, h('div.volume', {}, signOut), h('p.setting-note', {}, account ? `As ${account.name}, with your own account (${account.role}).` : 'With the shared office password.')),
     ],
     sound: [
@@ -556,7 +563,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
   const nav = h('nav.settings-nav', { role: 'tablist', 'aria-orientation': 'vertical', 'aria-label': 'Settings' });
   const tabs = new Map<SettingsPane, HTMLButtonElement>();
   const bodies = new Map<SettingsPane, HTMLElement>();
-  for (const p of PANES) {
+  for (const p of visiblePanes) {
     const tab = h('button.settings-tab', { type: 'button', role: 'tab', onclick: () => show(p.id) }, h('span.icon', { 'aria-hidden': 'true' }, p.icon), h('span', {}, p.label)) as HTMLButtonElement;
     tabs.set(p.id, tab);
     nav.append(tab);
@@ -578,39 +585,40 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
     if (!step) return;
     e.preventDefault();
-    const i = PANES.findIndex((p) => p.id === lastPane);
-    const next = PANES[(i + step + PANES.length) % PANES.length].id;
+    const i = visiblePanes.findIndex((p) => p.id === lastPane);
+    const next = visiblePanes[(i + step + visiblePanes.length) % visiblePanes.length].id;
     show(next);
     tabs.get(next)!.focus();
   });
 
-  const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
-  const el = h('div.modal.settings', { role: 'dialog', 'aria-label': 'Settings' }, h('header', {}, h('h2', {}, '⚙️ Settings'), close), h('div.settings-body', {}, nav, ...bodies.values()));
-  const offNotify = store.on('notify', paintHook);
-  const offDog = store.on('dog', paintDog);
-  const offTheme = store.on('theme', paintTheme);
-  const offMap = store.on('map', paintMap);
-  const offLeave = store.on('leaveOnMerge', paintLeave);
-  const offLimit = [store.on('machine', paintLimit), store.on('me', paintLimit)];
-  const offDir = [store.on('projectsDir', paintDir), store.on('me', paintDir)];
-  const offPrompts = [store.on('prompts', paintAgent), store.on('prompts', paintPrompts), store.on('me', paintAgent), store.on('me', paintPrompts)];
-  const modal = openModal(el, {
-    doing: '⚙️ in settings',
-    onClose: () => {
-      offNotify();
-      offDog();
-      offTheme();
-      offMap();
-      offLeave();
-      offLimit.forEach((off) => off());
-      offDir.forEach((off) => off());
-      offPrompts.forEach((off) => off());
-    },
-  });
+  const body = h('div.settings-body', {}, nav, ...bodies.values());
+  const offs = [
+    store.on('notify', paintHook),
+    store.on('dog', paintDog),
+    store.on('theme', paintTheme),
+    store.on('map', paintMap),
+    store.on('leaveOnMerge', paintLeave),
+    store.on('machine', paintLimit),
+    store.on('me', paintLimit),
+    store.on('projectsDir', paintDir),
+    store.on('me', paintDir),
+    store.on('prompts', paintAgent),
+    store.on('prompts', paintPrompts),
+    store.on('me', paintAgent),
+    store.on('me', paintPrompts),
+  ];
   show(first ?? lastPane);
-  close.addEventListener('click', () => modal.close());
   character.addEventListener('click', () => {
-    modal.close();
+    opts.leave?.();
     onCharacter();
   });
+  return { body, dispose: () => offs.forEach((off) => off()) };
+}
+
+export function openSettings(net: Net, settings: Settings, onChange: (s: Settings) => void, onCharacter: () => void, previewSound: () => void, notifier: DesktopNotifier, onSignOut: () => void, outside?: { now: string; live: boolean }, first?: SettingsPane) {
+  const built = buildSettings(net, settings, onChange, onCharacter, previewSound, notifier, onSignOut, outside, first, { leave: () => modal.close() });
+  const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
+  const el = h('div.modal.settings', { role: 'dialog', 'aria-label': 'Settings' }, h('header', {}, h('h2', {}, '⚙️ Settings'), close), built.body);
+  const modal = openModal(el, { doing: '⚙️ in settings', onClose: built.dispose });
+  close.addEventListener('click', () => modal.close());
 }

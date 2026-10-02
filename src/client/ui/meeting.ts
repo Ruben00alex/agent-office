@@ -70,7 +70,7 @@ export function openMeeting(net: Net, actions: MeetingActions, preset?: MeetingP
   render();
 }
 
-function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, net: Net, actions: MeetingActions, callAnother: () => void) {
+export function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, net: Net, actions: MeetingActions, callAnother: () => void) {
   const p = MEETING_PATTERNS[m.pattern];
   const running = m.status === 'running';
   const pill = h('span.pill', { class: running ? 'working' : m.status === 'done' ? 'done' : 'needs_input' }, running ? 'in a meeting' : m.status);
@@ -121,10 +121,10 @@ function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, net: Net
   );
 }
 
-const present = (...xs: (Node | null)[]): Node[] => xs.filter((x): x is Node => x !== null);
+export const present = (...xs: (Node | null)[]): Node[] => xs.filter((x): x is Node => x !== null);
 
 /** The form that calls a meeting: the pattern, what it's about, who sits down, the output, the bounds. */
-function meetingForm(net: Net, preset: MeetingPreset | undefined, done: () => void, back: () => void) {
+export function meetingForm(net: Net, preset: MeetingPreset | undefined, done: () => void, back: () => void) {
   let pattern: MeetingPattern = preset?.pattern ?? 'debate';
   let roles: string[] = [];
   let outputTouched = false;

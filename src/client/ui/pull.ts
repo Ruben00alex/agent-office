@@ -18,13 +18,13 @@ function onFloor(url: string): string {
   return store.floor ? `${url}${url.includes('?') ? '&' : '?'}floor=${encodeURIComponent(store.floor)}` : url;
 }
 
-async function getJson<T>(url: string): Promise<T> {
+export async function getJson<T>(url: string): Promise<T> {
   const r = await fetch(onFloor(url), { credentials: 'same-origin' });
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
   return r.json() as Promise<T>;
 }
 
-async function getText(url: string): Promise<string> {
+export async function getText(url: string): Promise<string> {
   const r = await fetch(onFloor(url), { credentials: 'same-origin' });
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
   return r.text();
@@ -74,7 +74,7 @@ interface MergePref {
 
 const METHOD_LABEL: Record<GhMergeMethod, string> = { squash: 'Squash and merge', merge: 'Create a merge commit', rebase: 'Rebase and merge' };
 
-function mergePref(methods: GhMergeMethod[]): { method: GhMergeMethod; deleteBranch: boolean } {
+export function mergePref(methods: GhMergeMethod[]): { method: GhMergeMethod; deleteBranch: boolean } {
   const p = pref<MergePref>(MERGE_KEY, {});
   return { method: p.method && methods.includes(p.method) ? p.method : methods[0], deleteBranch: p.deleteBranch ?? true };
 }
@@ -93,7 +93,7 @@ export function labelChip(l: GhLabel) {
   return h('span.label', { style: `background:${l.color};color:${lum < 0.55 ? '#fff' : 'var(--ink)'}` }, l.name);
 }
 
-function avatar(name: string) {
+export function avatar(name: string) {
   let x = 0;
   for (const ch of name) x = (x * 31 + ch.charCodeAt(0)) | 0;
   return h('span.gh-avatar', { style: `background:${AVATAR_COLORS[Math.abs(x) % AVATAR_COLORS.length]}`, 'aria-hidden': 'true' }, (name[0] ?? '?').toUpperCase());
@@ -104,14 +104,14 @@ function when(iso: string, url?: string) {
   return url ? h('a.when', { href: url, target: '_blank', rel: 'noopener noreferrer', title }, timeAgo(iso)) : h('span.when', { title }, timeAgo(iso));
 }
 
-const REVIEW_BADGE: Record<string, [string, string]> = {
+export const REVIEW_BADGE: Record<string, [string, string]> = {
   APPROVED: ['✅ approved', 'ok'],
   CHANGES_REQUESTED: ['🛠 requested changes', 'bad'],
   COMMENTED: ['💬 reviewed', ''],
   DISMISSED: ['review dismissed', 'muted'],
 };
 
-function commentCard(c: GhComment, itemUrl: string, verb: string, badge?: [string, string]) {
+export function commentCard(c: GhComment, itemUrl: string, verb: string, badge?: [string, string]) {
   return h(
     'article.gh-card',
     { class: badge?.[1] ? `is-${badge[1]}` : '' },
@@ -125,17 +125,17 @@ function nodes(...xs: (Node | string | null | undefined)[]): (Node | string)[] {
   return xs.filter((x): x is Node | string => x != null);
 }
 
-function spinnerRow(text: string) {
+export function spinnerRow(text: string) {
   return h('div.gh-loading', {}, h('span.spinner'), text);
 }
 
-function errorBox(text: string, retry?: () => void) {
+export function errorBox(text: string, retry?: () => void) {
   return h('div.gh-error', {}, `Couldn't load from GitHub: ${text}`, retry ? h('button.btn', { type: 'button', onclick: retry }, 'Try again') : null);
 }
 
-const CHECK_ICON: Record<GhCheck['state'], string> = { pass: '✅', fail: '❌', pending: '🟡', skip: '⚪' };
+export const CHECK_ICON: Record<GhCheck['state'], string> = { pass: '✅', fail: '❌', pending: '🟡', skip: '⚪' };
 
-function stateOf(it: { state: string; isDraft?: boolean }): [string, string] {
+export function stateOf(it: { state: string; isDraft?: boolean }): [string, string] {
   if (it.state === 'MERGED') return ['merged', 'merged'];
   if (it.state === 'CLOSED') return ['closed', 'offline'];
   return it.isDraft ? ['draft', 'idle'] : ['open', 'working'];
@@ -154,11 +154,11 @@ interface MergeStatus {
 }
 
 /** An open PR whose branch can't merge until someone resolves conflicts with the base. */
-function conflicted(d: GhPullDetail) {
+export function conflicted(d: GhPullDetail) {
   return d.state === 'OPEN' && !d.isDraft && (d.mergeable === 'CONFLICTING' || d.mergeStateStatus === 'DIRTY');
 }
 
-function mergeStatus(d: GhPullDetail): MergeStatus {
+export function mergeStatus(d: GhPullDetail): MergeStatus {
   const failing = d.checks.filter((c) => c.state === 'fail').length;
   const pending = d.checks.filter((c) => c.state === 'pending').length;
   if (d.state === 'MERGED') return { icon: '🎉', text: 'Merged.', cls: 'ok', can: false, auto: false };
@@ -177,7 +177,7 @@ function mergeStatus(d: GhPullDetail): MergeStatus {
   return { icon: '✅', text: `Ready to merge: no conflicts with ${d.baseRefName}${d.checks.length ? ' and all checks passed' : ''}.`, cls: 'ok', can: true, auto: false };
 }
 
-function checksList(checks: GhCheck[]) {
+export function checksList(checks: GhCheck[]) {
   const order: GhCheck['state'][] = ['fail', 'pending', 'pass', 'skip'];
   const sorted = [...checks].sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state));
   return h(
@@ -189,7 +189,7 @@ function checksList(checks: GhCheck[]) {
 
 // ---- Comment box --------------------------------------------------------------------------------
 
-interface CommentBox {
+export interface CommentBox {
   el: HTMLElement;
   /** Names the GitHub account the comment goes out as, once the window knows it. */
   setViewer(login: string): void;
@@ -202,7 +202,7 @@ interface CommentBox {
  * as that account rather than as you. The draft is kept per item until it is posted, so Esc or a
  * closed window doesn't lose it.
  */
-function commentBox(kind: 'issue' | 'pull', number: number, itemUrl: string, net: Net, onPosted: (c: GhComment) => void): CommentBox {
+export function commentBox(kind: 'issue' | 'pull', number: number, itemUrl: string, net: Net, onPosted: (c: GhComment) => void): CommentBox {
   const draftKey = `${DRAFT_KEY}${itemUrl}`;
   const waitKey = `${kind}#${number}`;
   let busy = false;
@@ -303,11 +303,11 @@ function commentBox(kind: 'issue' | 'pull', number: number, itemUrl: string, net
 // ---- Prompts for workers ------------------------------------------------------------------------
 
 /** What a pull request's prompts fill in. */
-function pullVars(it: GhPull) {
+export function pullVars(it: GhPull) {
   return { number: it.number, title: it.title, url: it.url, branch: it.headRefName, base: it.baseRefName };
 }
 
-function reviewPrompt(it: GhPull) {
+export function reviewPrompt(it: GhPull) {
   return officePrompt('pull.review', pullVars(it));
 }
 
@@ -319,25 +319,25 @@ function mergeVars(it: GhPull, method: GhMergeMethod, deleteBranch: boolean) {
   return { ...pullVars(it), repo: nameWithOwner(it.url), merge: mergeCommand(it, method, deleteBranch) };
 }
 
-function fixAndMergePrompt(it: GhPull, method: GhMergeMethod, deleteBranch: boolean) {
+export function fixAndMergePrompt(it: GhPull, method: GhMergeMethod, deleteBranch: boolean) {
   return officePrompt('pull.fixMerge', mergeVars(it, method, deleteBranch));
 }
 
-function fixConflictsPrompt(it: GhPull, method: GhMergeMethod, deleteBranch: boolean) {
+export function fixConflictsPrompt(it: GhPull, method: GhMergeMethod, deleteBranch: boolean) {
   return officePrompt('pull.fixConflicts', mergeVars(it, method, deleteBranch));
 }
 
-function pullContext(it: GhPull) {
+export function pullContext(it: GhPull) {
   return officePrompt('pull.ask', pullVars(it));
 }
 
-function issueContext(it: GhIssue) {
+export function issueContext(it: GhIssue) {
   return officePrompt('issue.ask', issueVars(it));
 }
 
 // ---- Merge dialog -------------------------------------------------------------------------------
 
-function openMerge(it: GhPull, d: GhPullDetail, net: Net, handToWorker: () => void, onMerged: () => void) {
+export function openMerge(it: GhPull, d: GhPullDetail, net: Net, handToWorker: () => void, onMerged: () => void) {
   const st = mergeStatus(d);
   const methods = d.repo.methods;
   let { method, deleteBranch } = mergePref(methods);
@@ -424,7 +424,7 @@ function openMerge(it: GhPull, d: GhPullDetail, net: Net, handToWorker: () => vo
 const REASON_LABEL: Record<GhCloseReason, string> = { completed: '✅ Completed', 'not planned': '🚫 Not planned' };
 
 /** Closes an issue (as completed or not planned) or a PR without merging, with an optional comment. */
-function openClose(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Net, onClosed: () => void) {
+export function openClose(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Net, onClosed: () => void) {
   const key = `${kind}:${it.number}`;
   const pull = kind === 'pull' ? (it as GhPull) : null;
   let reason: GhCloseReason = 'completed';
@@ -624,7 +624,7 @@ export function openLabels(kind: 'issue' | 'pull', it: GhIssue | GhPull, net: Ne
 }
 
 /** The button that opens the label picker, after an issue's or PR's labels. */
-function labelButton(kind: 'issue' | 'pull', it: () => GhIssue | GhPull, net: Net, onSaved: (labels: GhLabel[]) => void) {
+export function labelButton(kind: 'issue' | 'pull', it: () => GhIssue | GhPull, net: Net, onSaved: (labels: GhLabel[]) => void) {
   const has = it().labels.length > 0;
   return h('button.btn.gh-label-edit', { type: 'button', title: 'Change the labels', 'aria-label': 'Change the labels', onclick: () => openLabels(kind, it(), net, onSaved) }, has ? '🏷️ Edit' : '🏷️ Add labels');
 }

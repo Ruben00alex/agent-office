@@ -88,7 +88,7 @@ export function filterDocs(files: DocFile[], query: string): Hit[] {
 }
 
 /** The project's own docs first (its README before the rest), then each folder's, in path order. */
-function shelfOrder(files: DocFile[]): DocFile[] {
+export function shelfOrder(files: DocFile[]): DocFile[] {
   const rank = (p: string) => (p.includes('/') ? 2 : /^readme\./i.test(p) ? 0 : 1);
   return [...files].sort((a, b) => rank(a.path) - rank(b.path) || a.path.localeCompare(b.path));
 }
@@ -112,7 +112,7 @@ function marked(text: string, at: Set<number>): (string | HTMLElement)[] {
 }
 
 /** A heading's anchor, as GitHub makes them: lower case, punctuation dropped, spaces to dashes. */
-function slug(text: string): string {
+export function slug(text: string): string {
   return text
     .trim()
     .toLowerCase()
@@ -120,7 +120,7 @@ function slug(text: string): string {
     .replace(/ /g, '-');
 }
 
-function size(bytes: number): string {
+export function size(bytes: number): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB`;
 }
 

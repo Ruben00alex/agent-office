@@ -10,7 +10,7 @@ import type { TerminalFind } from './terminal';
 /** What was searched last, so the window opens where you left it. */
 let lastQuery = '';
 
-async function search(q: string): Promise<SearchResults> {
+export async function search(q: string): Promise<SearchResults> {
   // Terminals are the workers on your floor; the chat is the whole building's.
   const floor = store.floor ? `&floor=${encodeURIComponent(store.floor)}` : '';
   const r = await fetch(`/api/search?q=${encodeURIComponent(q)}${floor}`, { credentials: 'same-origin' });
@@ -19,7 +19,7 @@ async function search(q: string): Promise<SearchResults> {
 }
 
 /** `text` with every match of `needle` (a searchKey) marked. */
-function highlight(text: string, needle: string): (string | HTMLElement)[] {
+export function highlight(text: string, needle: string): (string | HTMLElement)[] {
   const flat = text.replace(/\s+/g, ' ');
   const lower = flat.toLowerCase();
   // Lowercasing can change a string's length (rare scripts); then just show it plain.

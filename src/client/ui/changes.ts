@@ -20,21 +20,21 @@ export function openChangesFor(): { workerId: string; repo?: string } | null {
   return current ? { workerId: current.workerId, repo: current.repo() } : null;
 }
 
-const STATUS_WORD: Record<ChangedFile['status'], string> = { M: 'modified', A: 'added', D: 'deleted', R: 'renamed', T: 'type changed', '?': 'new file' };
+export const STATUS_WORD: Record<ChangedFile['status'], string> = { M: 'modified', A: 'added', D: 'deleted', R: 'renamed', T: 'type changed', '?': 'new file' };
 
-function plusMinus(a: number, d: number, binary = false): HTMLElement {
+export function plusMinus(a: number, d: number, binary = false): HTMLElement {
   if (binary) return h('span.pm', {}, h('span.bin', {}, 'binary'));
   return h('span.pm', {}, h('span.add', {}, `+${a}`), ' ', h('span.del', {}, `−${d}`));
 }
 
 /** A path with its folder dimmed, so the file name stands out in a long list. */
-function pathLabel(p: string): HTMLElement {
+export function pathLabel(p: string): HTMLElement {
   const i = p.lastIndexOf('/');
   return h('span.path', { title: p }, i >= 0 ? h('span.dir', {}, p.slice(0, i + 1)) : null, p.slice(i + 1));
 }
 
 /** Renders a unified diff: hunk headers, added and removed lines, with line numbers. */
-function renderDiff(text: string, truncated: boolean): HTMLElement {
+export function renderDiff(text: string, truncated: boolean): HTMLElement {
   const out = h('div.diff-lines');
   let oldN = 0;
   let newN = 0;
@@ -86,7 +86,7 @@ function imageUrl(workerId: string, repo: string | undefined, f: ChangedFile, si
 }
 
 /** A changed picture, before and after; new and deleted files only have the one side. */
-function renderPreview(workerId: string, repo: string | undefined, f: ChangedFile): HTMLElement {
+export function renderPreview(workerId: string, repo: string | undefined, f: ChangedFile): HTMLElement {
   const sides: ('old' | 'new')[] = f.status === '?' || f.status === 'A' ? ['new'] : f.status === 'D' ? ['old'] : ['old', 'new'];
   return h(
     'div.img-preview',
