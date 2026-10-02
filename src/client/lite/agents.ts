@@ -199,7 +199,10 @@ export function agentChatScreen([kind]: string[]): Screen {
   const form = h('form.lp-compose', {}, attach, input, sendBtn);
   const subview = h('div.lp-subview.hidden');
   const tabs = h('div');
-  const conversationActions = maintenance ? null : actions(button('➕ New conversation', () => pick(undefined, true)), button('🕘 History', openHistory));
+  const conversationActions = actions(
+    button('🧭 All agents', () => go('agents')),
+    ...(maintenance ? [] : [button('➕ New conversation', () => pick(undefined, true)), button('🕘 History', openHistory)]),
+  );
   const jump = h('button.lp-jump.hidden', { type: 'button', 'aria-label': 'Jump to the latest message', onclick: () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }) }, '↓');
   const frame = layout({ top: [tabs, conversationActions], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
   const el = frame.el;
