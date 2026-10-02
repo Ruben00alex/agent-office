@@ -1551,10 +1551,18 @@ a.when:hover { text-decoration: underline; }
 .maintenance-rail-badge.good { color: #176b3a; }
 .maintenance-rail-badge.bad { color: #b3261e; }
 .maintenance-rail-tokens { color: #5b6573; }
-.maintenance-console-host { flex: none; height: clamp(230px, 44dvh, 520px); }
-.maintenance-live-console { flex: none; min-height: 0; }
-/* The details element must not shrink below its content, or the stack panel paints over the answer box. */
-.maintenance-console { flex: none; }
+/* Desktop: the rail never scrolls. Only the terminal gives way, so the answer box and stack always fit. */
+.maintenance-console-rail { overflow: hidden; }
+.maintenance-console { flex: 1 1 0; min-height: 0; }
+.maintenance-live-console { flex: 1 1 0; min-height: 0; }
+.maintenance-console-host { flex: 1 1 0; height: auto; min-height: 90px; }
+.maintenance-console-keys, .maintenance-console-answer { flex: none; }
+@media (max-width: 1150px) {
+  /* Stacked below the conversation: the rail takes its natural height and the workspace itself scrolls, as before. */
+  .maintenance-console-rail { overflow: visible; }
+  .maintenance-console, .maintenance-live-console { flex: none; }
+  .maintenance-console-host { flex: none; height: clamp(230px, 44dvh, 520px); }
+}
 .maintenance-chat .maintenance-rail-stack > button:not(.maintenance-rail-commit) { padding: 9px 12px; background: #3b5293; border-color: #3b5293; color: #fff; font-weight: 650; }
 .maintenance-chat .maintenance-rail-stack > button:not(.maintenance-rail-commit):hover { background: #2f437a; }
 .maintenance-rail-stack h3 { color: #2f437a; }
