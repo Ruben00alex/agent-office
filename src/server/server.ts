@@ -2051,7 +2051,7 @@ export async function startServer(cfg: Config) {
         if (!floor) { reply('Take the elevator to a project floor first'); break; }
         const deskId = msg.t === 'maintenance.chat.send' ? MAINTENANCE_DESK : msg.t === 'product.chat.send' ? PRODUCT_DESK : str(msg.deskId, 32);
         // Nobody there yet: whoever asks first hires it, on their own sign-ins.
-        const chat = msg.t !== 'station.prompt' ? { newConversation: msg.newConversation === true, thread: str(msg.thread, 64) || undefined } : undefined;
+        const chat = { newConversation: msg.newConversation === true, thread: msg.t !== 'station.prompt' ? str(msg.thread, 64) || undefined : undefined };
 
         // Not the office's default: hired on this, or moved onto it if it's on something else (see Workers.station).
         let pick: AgentChoice | undefined;

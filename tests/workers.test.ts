@@ -1806,3 +1806,43 @@ test('Maintenance requests and structured replies reach the archive even without
   const restored = new MaintenanceChatArchive(f.data);
   assert.equal(restored.page(result.info.id)?.messages.length, 3, 'worker departure does not delete the chat');
 });
+
+test('Issues and PR agents start fresh only after their current turn finishes', async (t) => {
+  const f = fixture();
+  isolateProviderEnvironment(f, t);
+  const previousLog = process.env.FAKE_AGENT_LOG;
+  const previousExit = process.env.FAKE_AGENT_EXIT_MS;
+  process.env.FAKE_AGENT_LOG = f.log;
+  process.env.FAKE_AGENT_EXIT_MS = '10000';
+  t.after(() => {
+    if (previousLog === undefined) delete process.env.FAKE_AGENT_LOG; else process.env.FAKE_AGENT_LOG = previousLog;
+    if (previousExit === undefined) delete process.env.FAKE_AGENT_EXIT_MS; else process.env.FAKE_AGENT_EXIT_MS = previousExit;
+    f.close();
+  });
+  const workers = manager(f, f.claude, []);
+  t.after(() => workers.shutdown());
+  for (const desk of ['station-issues', 'station-pulls']) {
+    const first = workers.station(desk, 'Alex', 'First conversation');
+    assert.equal(typeof first, 'object');
+    if (typeof first === 'string') return;
+    const invocation = (await waitFor(() => f.read(), rows => rows.some(r => r.env.workerId === first.info.id))).find(r => r.env.workerId === first.info.id)!;
+    const token = invocation.env.hookToken!;
+    workers.handleHook(first.info.id, token, 'SessionStart', { session_id: 'previous-context' });
+    workers.handleHook(first.info.id, token, 'UserPromptSubmit', { prompt: 'First conversation' });
+    assert.match(workers.station(desk, 'Alex', 'Fresh', undefined, { newConversation: true }) as string, /still busy/);
+    workers.handleHook(first.info.id, token, 'PermissionRequest', { tool_name: 'Bash' });
+    assert.match(workers.station(desk, 'Alex', 'Fresh', undefined, { newConversation: true }) as string, /waiting on an answer/);
+    assert.equal(workers.get(first.info.id)?.sessionId, 'previous-context');
+    workers.handleHook(first.info.id, token, 'Stop', {});
+    const fresh = workers.station(desk, 'Alex', 'Fresh', undefined, { newConversation: true });
+    assert.equal(typeof fresh, 'object');
+    if (typeof fresh === 'string') return;
+    assert.notEqual(fresh.info.id, first.info.id);
+    assert.equal(fresh.hired, true);
+    assert.equal(fresh.info.sessionId, undefined);
+    assert.equal(workers.get(first.info.id), undefined);
+    const launch = (await waitFor(() => f.read(), rows => rows.some(r => r.env.workerId === fresh.info.id))).find(r => r.env.workerId === fresh.info.id)!;
+    assert.equal(launch.args.includes('--resume'), false);
+    assert.ok(taskPrompt(launch.args.at(-1)!).endsWith('\n\nFresh'), 'new launch includes its station brief and fresh request');
+  }
+});

@@ -27,23 +27,27 @@ const STATION_INFO: Record<string, { icon: string; offer: string; example: strin
 };
 
 /** A board agent's prompt: the same box the kiosk gives you at the office. */
-function askBoardAgent(deskId: string, kind: string) {
+function askBoardAgent(deskId: string, kind: string, fresh = false) {
   const w = store.workerAtDesk(deskId);
   const name = STATION_AGENT[kind as 'issues'].name;
   const info = STATION_INFO[kind];
+  if (fresh && w && !['idle', 'done', 'exited'].includes(w.status)) {
+    toast(w.status === 'needs_input' ? `The ${name} is waiting on an answer. Open its terminal to respond before starting fresh.` : `The ${name} is busy. Wait for it to finish before starting fresh.`, 'warn');
+    return;
+  }
   if (w?.status === 'needs_input') {
     toast(`The ${name} is waiting on an answer — here's its terminal`, 'warn');
     return openWorker(w.id);
   }
   openPrompt({
-    title: `${info.icon} Ask the ${name}`,
-    subtitle: !w ? `${info.offer}, in a terminal of its own.` : isAsleep(w.status) ? `The ${name} is asleep: this wakes it up.` : isBusy(w.status) ? `The ${name} is busy. Your prompt waits in its input box.` : undefined,
+    title: fresh ? `${info.icon} New conversation with the ${name}` : `${info.icon} Ask the ${name}`,
+    subtitle: fresh ? 'Your first message starts a fresh session. This board agent has no conversation history list.' : !w ? `${info.offer}, in a terminal of its own.` : isAsleep(w.status) ? `The ${name} is asleep: this wakes it up.` : isBusy(w.status) ? `The ${name} is busy. Your prompt waits in its input box.` : undefined,
     placeholder: `e.g. ${info.example}`,
     submitLabel: 'Send ✨',
     providerOption: true,
     providerLabel: 'Runs on',
     providerCurrent: workerChoice(w),
-    onSubmit: (text, o) => net.send({ t: 'station.prompt', deskId, prompt: text, ...(o.picked && o.provider ? { provider: o.provider, model: o.model, effort: o.effort } : {}) }),
+    onSubmit: (text, o) => net.send({ t: 'station.prompt', deskId, prompt: text, ...(fresh ? { newConversation: true } : {}), ...(o.picked && o.provider ? { provider: o.provider, model: o.model, effort: o.effort } : {}) }),
   });
 }
 
@@ -65,7 +69,12 @@ export function agentsScreen(): Screen {
       ...STATIONS.filter((s) => s.station && STATION_INFO[s.station]).map((s) => {
         const w = store.workerAtDesk(s.id);
         const info = STATION_INFO[s.station!];
-        return row({ icon: info.icon, title: STATION_AGENT[s.station!].name, sub: `${info.offer}${w ? ` · ${w.status === 'needs_input' ? '🙋 waiting on you' : isAsleep(w.status) ? '💤 asleep' : w.status === 'working' ? 'working' : 'ready'}` : ''}`, onclick: () => askBoardAgent(s.id, s.station!) });
+        return h(
+          'section.lp',
+          { 'aria-label': STATION_AGENT[s.station!].name },
+          row({ icon: info.icon, title: STATION_AGENT[s.station!].name, sub: `${info.offer}${w ? ` · ${w.status === 'needs_input' ? '🙋 waiting on you' : isAsleep(w.status) ? '💤 asleep' : w.status === 'working' ? 'working' : 'ready'}` : ''}`, onclick: () => askBoardAgent(s.id, s.station!) }),
+          actions(button('➕ New conversation', () => askBoardAgent(s.id, s.station!, true))),
+        );
       }),
       heading('Permissions'),
       h(
@@ -190,8 +199,9 @@ export function agentChatScreen([kind]: string[]): Screen {
   const form = h('form.lp-compose', {}, attach, input, sendBtn);
   const subview = h('div.lp-subview.hidden');
   const tabs = h('div');
+  const conversationActions = maintenance ? null : actions(button('➕ New conversation', () => pick(undefined, true)), button('🕘 History', openHistory));
   const jump = h('button.lp-jump.hidden', { type: 'button', 'aria-label': 'Jump to the latest message', onclick: () => scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' }) }, '↓');
-  const frame = layout({ top: [tabs], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
+  const frame = layout({ top: [tabs, conversationActions], scroll: [older, list, typing, subview, jump], bottom: [banner, errorEl, images?.element ?? null, form] });
   const el = frame.el;
   const scroller = frame.scroller;
   frame.top.classList.add('lp-top-slim');
@@ -232,6 +242,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     newConversation = fresh;
     selected = thread;
     loadedDraft = '';
+    input.value = '';
     messages = [];
     messageKey = '';
     showError('');
@@ -285,7 +296,7 @@ export function agentChatScreen([kind]: string[]): Screen {
         ),
       );
     }
-    frame.top.classList.toggle('hidden', !maintenance);
+    frame.top.classList.remove('hidden');
   }
 
   const typingNow = () => {
@@ -310,7 +321,7 @@ export function agentChatScreen([kind]: string[]): Screen {
     images?.disable(input.disabled);
     sendBtn.disabled = input.disabled || !!images?.uploading || (waiting && !model.edited()) || (newConversation && busy) || state?.stack?.phase === 'shipping' || state?.stack?.validation?.phase === 'running';
     const say = newConversation
-      ? busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'New conversation: the earlier ones stay in History.'
+      ? waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯ before starting a new conversation.` : busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'New conversation: the earlier ones stay in History.'
       : archived ? 'An earlier conversation, read-only. Open History to go back to the current one.'
         : waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯ to respond.`
           : state && !state.richReplies ? 'This provider replies in its terminal; your messages are still kept here.'

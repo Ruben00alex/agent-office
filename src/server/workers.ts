@@ -592,11 +592,11 @@ export class WorkerManager {
     const clean = text.replace(/\r\n?/g, '\n').trim();
     if (!clean) return 'Empty prompt';
     let w = [...this.workers.values()].find((x) => x.info.deskId === deskId);
-    if (chat && (deskId === MAINTENANCE_DESK || deskId === PRODUCT_DESK)) {
+    if (chat) {
       const product = deskId === PRODUCT_DESK;
       if (chat.thread && chat.thread !== w?.info.id) return product ? 'This conversation is archived. Start a new conversation to talk about something else.' : 'This conversation is archived. Start a new conversation for another issue.';
       if (chat.newConversation && w) {
-        if (!['idle', 'done', 'exited'].includes(w.info.status)) return product ? 'The Product Lead is still replying. Wait a moment before starting a new conversation.' : 'Maintenance is still busy. Wait for the current issue to finish before starting a new conversation.';
+        if (!['idle', 'done', 'exited'].includes(w.info.status)) return w.info.status === 'needs_input' ? `The ${w.info.name} is waiting on an answer in its terminal. Respond there before starting a new conversation.` : `The ${w.info.name} is still busy. Wait for it to finish before starting a new conversation.`;
         // Station workers share the stack directory and never own a disposable worktree.
         if (w.info.worktree) return 'Cannot replace a station worker with a private worktree';
         void this.kill(w.info.id);
