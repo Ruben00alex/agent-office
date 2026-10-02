@@ -1625,6 +1625,9 @@ test('automatic permission review stays working, cancels transient alerts and st
   assert.equal(savedReview.permissionReview.since, Date.now());
   hook('Notification', { notification_type: 'idle_prompt' });
   assert.equal(worker.status, 'working', 'review is not a completed turn');
+  hook('Notification', { notification_type: 'permission_prompt' });
+  assert.equal(worker.status, 'working', 'permission notifications do not interrupt automatic review');
+  assert.equal(worker.waitingSince, undefined);
   t.mock.timers.tick(1000);
   hook('PostToolUse', { tool_name: 'Bash' });
   assert.equal(JSON.parse(readFileSync(path.join(f.data, 'workers.json'), 'utf8')).find((w: any) => w.id === worker.id).permissionReview, undefined, 'resolved review cannot return after restart');
@@ -1636,7 +1639,9 @@ test('automatic permission review stays working, cancels transient alerts and st
   hook('PermissionRequest', { tool_name: 'Bash' });
   assert.equal(worker.status, 'working', 'lever changes do not change the running process');
   t.mock.timers.tick(AUTO_APPROVAL_GRACE_MS - 1);
+  hook('Notification', { notification_type: 'permission_prompt' });
   assert.equal(worker.status, 'working');
+  assert.equal(updates.slice(start).some(w => w.status === 'needs_input'), false, 'notifications stay quiet until the fallback deadline');
   hook('PermissionRequest', { tool_name: 'Bash' });
   t.mock.timers.tick(1);
   assert.equal(worker.status, 'needs_input', 'duplicates do not extend the fallback deadline');
@@ -1648,9 +1653,9 @@ test('automatic permission review stays working, cancels transient alerts and st
   t.mock.timers.tick(AUTO_APPROVAL_GRACE_MS);
   assert.equal(worker.status, 'done', 'completion cancels pending help');
   hook('UserPromptSubmit', { prompt: 'Next task' });
-  hook('PermissionRequest', { tool_name: 'Bash' });
+  t.mock.timers.tick(5001);
   hook('Notification', { notification_type: 'permission_prompt' });
-  assert.equal(worker.status, 'needs_input', 'confirmed human prompt bypasses review grace');
+  assert.equal(worker.status, 'needs_input', 'human prompt without an automatic review surfaces immediately');
   hook('PostToolUse');
   hook('PermissionRequest', { tool_name: 'Bash' });
   hook('UserPromptSubmit', { prompt: 'Replace the task' });

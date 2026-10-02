@@ -1285,7 +1285,7 @@ export class WorkerManager {
         break;
       case 'Notification':
         if (payload?.notification_type === 'permission_prompt') {
-          if (w.permissionTimer || now - w.leftNeedsInputAt > LATE_PROMPT_GRACE_MS) {
+          if (!w.permissionTimer && now - w.leftNeedsInputAt > LATE_PROMPT_GRACE_MS) {
             if (w.permissionReview?.activity) w.info.activity = w.permissionReview.activity;
             this.setStatus(w, 'needs_input');
           }
