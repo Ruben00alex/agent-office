@@ -243,7 +243,7 @@ function wallLever(): { group: THREE.Group; set(on: boolean): void; update(dt: n
 }
 
 export interface Closet {
-  /** Post-it issue board behind the Maintenance agent. */
+  /** Post-it issue board on the south wall, above the laptop. */
   issueBoard: THREE.Mesh;
   /** The laptop's interactable: E there asks the office's small model something. */
   laptop: Interactable;
@@ -310,15 +310,15 @@ export function buildMaintenanceCloset(
   const lamp = toon('#fff3b0', { emissive: '#fff3b0' });
   group.add(mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.04, 16), lamp, (M.minX + M.maxX) / 2, H - 0.02, midZ, false));
 
-  // Behind Maintenance, facing into the room; above the counter and clear of the rack.
+  // On the Maintenance agent's right (the south wall), above the laptop's bench, facing north into the room.
   const board = new THREE.Group();
-  board.position.set(M.minX + 0.09, 1.95, 3.2);
-  board.rotation.y = Math.PI / 2;
+  board.position.set(M.bench.x, 1.75, M.maxZ - T / 2 - 0.05);
+  board.rotation.y = Math.PI;
   board.add(mesh(box(2.1, 1.05, 0.08), toon('#8b5e3c'), 0, 0, 0));
   const issueBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.95, 0.9), new THREE.MeshBasicMaterial({ color: '#d8a86a' }));
   issueBoard.position.z = 0.045;
   board.add(issueBoard);
-  const boardAt: Interactable = { kind: 'maintenanceIssues', x: M.minX + 0.2, z: 3.2, radius: 1.2 };
+  const boardAt: Interactable = { kind: 'maintenanceIssues', x: MAINTENANCE_LAPTOP.x, z: MAINTENANCE_LAPTOP.z, radius: 1.2 };
   board.userData.interact = boardAt;
   interactables.push(boardAt);
   const boardLabel = textPlane('AGENT OFFICE · ISSUES', { bg: '#fffaf3', color: INK, size: 32, border: INK });

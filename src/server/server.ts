@@ -1180,6 +1180,12 @@ export async function startServer(cfg: Config) {
           const number = Number(body.number);
           if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Bad issue number');
           if (body.reviewed === true) maintenanceWork.reviewed(repo, number);
+          else if (body.close === true) {
+            if (maintenanceWork.get(repo, number)?.status === 'running') throw new Error('Finish or end the active session before closing it.');
+            const as = session.account ? signins.ghAs(session.account.id) : undefined;
+            if (typeof as === 'string') throw new Error(as);
+            await maintenanceBoard.close(number, as);
+          }
           else if (body.remove === true) {
             if (maintenanceWork.get(repo, number)?.status === 'running') throw new Error('Finish or end the active session before removing it.');
             const as = session.account ? signins.ghAs(session.account.id) : undefined;

@@ -39,6 +39,7 @@ export function openMaintenanceBoard(send: (msg: ClientMsg) => void, correct: (c
     h('header', {}, h('h2', {}, '🛠️ Agent Office issues'), status,
       h('button.btn', { type: 'button', onclick: () => openMaintenanceIssueCreate(() => send({ t: 'maintenance.issues' })) }, '+ Add issue'),
       h('button.btn', { type: 'button', onclick: () => send({ t: 'maintenance.issues' }) }, '🔄 Refresh')), body);
+  let closeError = '';
   const render = () => {
     const state = store.maintenanceIssues;
     status.textContent = state.loading ? 'Refreshing…' : state.fetchedAt ? `Updated ${timeAgo(state.fetchedAt)}` : '';
@@ -46,12 +47,21 @@ export function openMaintenanceBoard(send: (msg: ClientMsg) => void, correct: (c
     const columns = h('div.maintenance-columns');
     body.append(h('p.maintenance-repo', {}, `${state.repo ?? 'Agent Office source repository'} · Shared across every floor`));
     if (state.error) body.append(h('p.setting-note.bad', { role: 'alert' }, state.error));
+    if (closeError) body.append(h('p.setting-note.bad', { role: 'alert' }, closeError));
     for (const column of maintenanceIssueColumns(state.items)) {
       const cards = h('ul');
-      column.items.forEach((issue) => cards.append(h('li', {}, h('button.maintenance-note', {
+      column.items.forEach((issue) => cards.append(h('li.maintenance-card', {}, h('button.maintenance-note', {
         type: 'button', title: issue.title, style: `background:${['#fff7b0', '#ffd6e0', '#caffbf', '#bde0fe', '#ffe5b4'][issue.number % 5]}`,
         onclick: () => openMaintenanceIssue(issue, correct, send),
-      }, h('strong', {}, `#${issue.number}`), h('span', {}, issue.title)))));
+      }, h('strong', {}, `#${issue.number}`), h('span', {}, issue.title)),
+        ...(issue.state === 'OPEN' ? [h('button.btn.maintenance-close', { type: 'button', title: `Close issue #${issue.number} on GitHub`, 'aria-label': `Close issue #${issue.number}`, onclick: (e: Event) => {
+          const button = e.currentTarget as HTMLButtonElement;
+          button.disabled = true;
+          closeError = '';
+          void maintenancePost('/api/maintenance/queue', { number: issue.number, close: true })
+            .then(() => send({ t: 'maintenance.issues' }))
+            .catch((error) => { closeError = `Couldn't close #${issue.number}: ${error.message}`; render(); });
+        } }, '✓ Close')] : []))));
       if (!column.items.length) cards.append(h('li.empty', {}, state.loading ? 'Loading…' : 'Nothing here'));
       columns.append(h('section.column', {}, h('h4', {}, `${column.title} · ${column.items.length}`), cards));
     }

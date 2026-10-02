@@ -68,6 +68,17 @@ export class MaintenanceBoard {
     await this.refresh();
   }
 
+  /** Closes an open issue on GitHub (completed), dropping it from the queue. Separate from shipping the stack. */
+  async close(number: number, as?: GhAs) {
+    const detail = await this.issue(number);
+    if (detail.state !== 'OPEN') throw new Error('This issue is already closed');
+    const error = await this.github!.close('issue', number, { reason: 'completed' }, as);
+    if (error) throw new Error(error);
+    const issue = this.state.items.find(i => i.number === number);
+    if (issue && issue.labels.some(l => l.name === MAINTENANCE_QUEUE_LABEL)) await this.github!.setLabels('issue', number, [], [MAINTENANCE_QUEUE_LABEL], as);
+    await this.refresh();
+  }
+
   async claim(number: number, as?: GhAs) {
     await this.issue(number);
     return this.github!.claim(number, as);
