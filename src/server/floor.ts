@@ -43,6 +43,8 @@ export interface FloorContext {
   ledger: Ledger;
   /** Why a provider can't take a new worker (its plan window is used up), when it can't. */
   providerDepleted(provider: AgentProvider): string | undefined;
+  /** A Codex worker's terminal says the account's usage limit is hit, until `resetsAt`. */
+  codexLimitHit(resetsAt: number): void;
   /** The office's worker limit, across every floor. */
   capacity: Capacity;
   /** The office's prompts and the worker everyone starts on, as set in ⚙️ Settings. */
@@ -210,6 +212,7 @@ export class Floor {
         data: (workerId, data, viewers) => ctx.termData(workerId, data, viewers),
         screen: (workerId, frame) => ctx.emit(this, { t: 'screen', workerId, ...frame }, true),
         toast: (text, level) => ctx.toast(this, text, level),
+        codexLimitHit: (resetsAt) => ctx.codexLimitHit(resetsAt),
       },
       ctx.ledger,
       ctx.capacity,

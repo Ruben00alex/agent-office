@@ -709,6 +709,9 @@ export async function startServer(cfg: Config) {
     hook: { url: `http://127.0.0.1:${hookPort}`, token: '' },
     ledger,
     capacity: machine,
+    codexLimitHit: (resetsAt) => {
+      if (codexLimits.exhausted(resetsAt)) broadcast({ t: 'codex.limits', state: codexLimits.state });
+    },
     providerDepleted: (provider) => {
       const state = provider === 'claude' ? limits.state : provider === 'codex' ? codexLimits.state : undefined;
       const full = state?.windows.find((w) => w.pct >= 100 && (w.resetsAt === undefined || w.resetsAt > Date.now()));

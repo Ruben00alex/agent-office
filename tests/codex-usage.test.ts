@@ -98,3 +98,16 @@ test('shared Codex plan snapshot uses the newest report without summing workers'
   assert.equal(shared.update({ windows: [], at: 3000 }), false);
   assert.deepEqual(shared.state, newer);
 });
+
+test('the usage-limit message in a Codex terminal marks the plan window full until its reset', async () => {
+  const { codexLimitHit, CodexPlanSnapshot } = await import('../src/server/codex-usage.js');
+  const at = codexLimitHit("\x1b[31m■ You've hit your usage limit. Upgrade to Pro (https://x), visit https://y to purchase more credits or try again at Oct 3rd, 2026 6:53 PM.");
+  assert.equal(at, new Date('Oct 3, 2026 6:53 PM').getTime());
+  assert.equal(codexLimitHit('all fine'), null);
+  const snap = new CodexPlanSnapshot();
+  snap.update({ at: 1, windows: [{ label: '5h session', pct: 8 }, { label: 'Week', pct: 94 }] });
+  const now = new Date('Oct 2, 2026 8:00 AM').getTime();
+  snap.exhausted(at!, now);
+  assert.equal(snap.state.windows.find((w) => w.label === 'Week')?.pct, 100);
+  assert.equal(snap.state.windows.find((w) => w.label === '5h session')?.pct, 8);
+});

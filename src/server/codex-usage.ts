@@ -102,6 +102,21 @@ export class CodexUsageReader {
   }
 }
 
+const LIMIT_HIT = /hit your usage limit[\s\S]{0,300}?try again at ([A-Z][a-z]{2} \d{1,2})(?:st|nd|rd|th)?, (\d{4}) (\d{1,2}:\d{2} [AP]M)/;
+
+/**
+ * Codex stops sending plan percentages once its limit is hit, so the meter would stay at its last
+ * (stale) numbers. The terminal says "You've hit your usage limit … try again at Oct 3rd, 2026 6:53 PM":
+ * the reset time in it (the office machine's local time), or null when `text` isn't that message.
+ */
+export function codexLimitHit(text: string): number | null {
+  // eslint-disable-next-line no-control-regex
+  const m = LIMIT_HIT.exec(text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, ''));
+  if (!m) return null;
+  const at = Date.parse(`${m[1]}, ${m[2]} ${m[3]}`);
+  return Number.isFinite(at) ? at : null;
+}
+
 /** Account percentages are shared: keep the newest report, never add worker percentages. */
 export class CodexPlanSnapshot {
   state: PlanLimits = { windows: [], at: 0 };
@@ -109,6 +124,17 @@ export class CodexPlanSnapshot {
   update(limits: PlanLimits | undefined): boolean {
     if (!limits?.windows.length || limits.at <= this.state.at) return false;
     this.state = limits;
+    return true;
+  }
+
+  /** A worker hit the limit: whichever window blocks it (the week when the reset is far off) is full until `resetsAt`. */
+  exhausted(resetsAt: number, now = Date.now()): boolean {
+    const week = resetsAt - now > 6 * 3_600_000;
+    const label = week ? 'Week' : '5h session';
+    const windows = this.state.windows.filter((w) => w.label !== label).map((w) => ({ ...w }));
+    windows.push({ label, pct: 100, resetsAt });
+    windows.sort((a, b) => (a.label === 'Week' ? 1 : 0) - (b.label === 'Week' ? 1 : 0));
+    this.state = { windows, at: Math.max(now, this.state.at + 1) };
     return true;
   }
 }
