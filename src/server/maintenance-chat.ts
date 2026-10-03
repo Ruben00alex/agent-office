@@ -22,6 +22,8 @@ export function transcriptMessage(row: any): { role: 'user' | 'assistant'; conte
     if (clean.startsWith("You're the Maintenance agent in Agent Office")) clean = clean.split('\n\nThe request:\n\n').at(-1) ?? clean;
     // The Product Lead's brief likewise ends in its first message.
     if (clean.startsWith("You're the Product Lead in Agent Office")) clean = clean.split('\n\nThe first message:\n\n').at(-1) ?? clean;
+    const fix = clean.indexOf('\n\n[Fix now]\n');
+    if (fix >= 0) clean = clean.slice(0, fix);
     const images = clean.indexOf('\n\n[Maintenance images]');
     if (images >= 0) clean = clean.slice(0, images);
     const tv = clean.indexOf('\n\nOffice TV:');

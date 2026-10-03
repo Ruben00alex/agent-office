@@ -4,6 +4,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync,
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MaintenanceChatArchive, MaintenanceTranscriptReader, transcriptMessage } from '../src/server/maintenance-chat.js';
+import { maintenanceQuickFixPrompt } from '../src/server/maintenance.js';
 import { stationBrief } from '../src/server/stations.js';
 import { presentationBrief } from '../src/server/presentations.js';
 import type { WorkerInfo } from '../src/shared/protocol.js';
@@ -19,6 +20,7 @@ test('chat extracts public Markdown and HTML but excludes tool results, reasonin
   assert.equal(transcriptMessage(row('user', prompt))?.content, 'Build a chat view');
   assert.equal(transcriptMessage(row('user', '<environment_context>private context</environment_context>')), undefined);
   assert.equal(transcriptMessage(row('system', 'hidden instructions')), undefined);
+  assert.equal(transcriptMessage(row('user', maintenanceQuickFixPrompt('Fix cramped spacing')))?.content, 'Fix cramped spacing');
   const privateMessage = row('assistant', 'Private reasoning');
   privateMessage.payload.phase = 'analysis';
   assert.equal(transcriptMessage(privateMessage), undefined);

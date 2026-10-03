@@ -49,7 +49,7 @@ import { WB_MAX_FILE_BYTES } from '../shared/whiteboard.js';
 import { DROP_MAX_BYTES } from '../shared/drops.js';
 import { MAX_FLOORS } from '../shared/floors.js';
 import { lookFromSeed, sanitizeLook } from '../shared/avatar.js';
-import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree, runMaintenanceModel } from './maintenance.js';
+import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree, maintenanceQuickFixPrompt, runMaintenanceModel } from './maintenance.js';
 import { craftMaintenanceIssue, draftMaintenanceIssue, isIssueWriter } from './maintenance-issue-draft.js';
 import { IssueJobs, type IssueJobInput } from './maintenance-issue-jobs.js';
 import { ISSUE_LABELS } from '../shared/maintenance-issues.js';
@@ -2144,16 +2144,17 @@ export async function startServer(cfg: Config) {
           pick = { provider: msg.provider, ...(model ? { model } : {}), ...(effort ? { effort } : {}) };
         }
 
-        let maintenanceIssue = msg.t !== 'product.chat.send' && deskId === MAINTENANCE_DESK ? issueNumber(msg.maintenanceIssue) : undefined;
-        const quickFix = msg.t === 'maintenance.chat.send' && msg.quickFix === true;
-        if (quickFix && (maintenanceIssue || !str(msg.prompt, 20000).trim())) { reply('Describe a new fix before starting it.'); break; }
-        const send = async (as?: GhAs) => {
+        const maintenanceIssue = msg.t !== 'product.chat.send' && deskId === MAINTENANCE_DESK ? issueNumber(msg.maintenanceIssue) : undefined;
+        const send = async () => {
           const maintenance = deskId === MAINTENANCE_DESK;
           if (maintenance && maintenanceStarting) { reply('Another Maintenance request is being started. Try again in a moment.'); return; }
           if (maintenance) maintenanceStarting = true;
           try {
             let prompt = str(msg.prompt, 20000);
-            if (quickFix && maintenanceAgent()?.info && !['idle', 'done', 'exited'].includes(maintenanceAgent()!.info.status)) { reply('Maintenance is busy. Wait for the current work to finish before starting a new fix.'); return; }
+            if (msg.t === 'maintenance.chat.send' && msg.quickFix === true) {
+              if (maintenanceIssue || !prompt.trim()) { reply('Describe a new fix before starting it.'); return; }
+              prompt = maintenanceQuickFixPrompt(prompt);
+            }
             try {
               if (maintenanceIssue) {
                 const active = maintenanceAgent()?.info;
@@ -2163,15 +2164,15 @@ export async function startServer(cfg: Config) {
             } catch (err) { reply((err as Error).message); return; }
             if (deskId === MAINTENANCE_DESK && (stack.state.phase === 'shipping' || stack.state.validation?.phase === 'running')) { reply('The stack is being shipped or checked: wait for it to finish'); return; }
             const target = deskId === MAINTENANCE_DESK ? maintenanceAgent()?.floor ?? floor : floor;
-            if (maintenanceIssue || quickFix) await stack.refresh();
+            if (maintenanceIssue) await stack.refresh();
             maintenanceWork.reconcile(maintenanceAgent()?.info, stack.state.changes);
             const queued = maintenanceIssue && maintenanceBoard.state.repo ? maintenanceWork.get(maintenanceBoard.state.repo, maintenanceIssue) : undefined;
             const active = maintenanceAgent()?.info;
             if (maintenanceIssue && active && !['idle', 'done', 'exited'].includes(active.status)) { reply('Maintenance is busy. Queue the issue and start it after current work finishes.'); return; }
             const images = msg.t === 'maintenance.chat.send' ? maintenanceImages.resolve(msg.attachments ?? queued?.attachments.map(i => i.id) ?? []) : [];
-            let displayPrompt = prompt;
+            const displayPrompt = msg.t === 'maintenance.chat.send' && msg.quickFix === true ? str(msg.prompt, 20000) : prompt;
             if (maintenance) prompt = maintenanceImages.prompt(prompt, images);
-            const stationChat = (maintenanceIssue || quickFix) && maintenance ? { ...chat, newConversation: true, thread: undefined } : chat;
+            const stationChat = maintenanceIssue && maintenance ? { ...chat, newConversation: true, thread: undefined } : chat;
             // No provider chosen and the one it would run on has used up its plan: move to another metered provider with room.
             // That includes an agent already sitting there, busy or not: stuck on a spent plan, it can't get any further.
             if (!pick) {
@@ -2193,39 +2194,26 @@ export async function startServer(cfg: Config) {
             }
             if (c.out || c.ws.readyState !== WebSocket.OPEN) return;
             if (maintenance && (stack.state.phase === 'shipping' || stack.state.validation?.phase === 'running')) { reply('Wait for shipping or checks to finish.'); return; }
-            if ((maintenanceIssue || quickFix) && maintenanceWork.list(maintenanceBoard.state.repo).some(i => i.status === 'running')) { reply('Another issue is active. Finish it before starting the next one.'); return; }
+            if (maintenanceIssue && maintenanceWork.list(maintenanceBoard.state.repo).some(i => i.status === 'running')) { reply('Another issue is active. Finish it before starting the next one.'); return; }
             {
-              if (quickFix) {
-                const request = str(msg.prompt, 20000).trim();
-                const issue = await maintenanceBoard.create(request.replace(/\s+/g, ' ').slice(0, 120), request, as);
-                maintenanceIssue = issue.number;
-                // Save evidence before dispatch: a failed start leaves a recoverable issue in Work.
-                maintenanceWork.queue(maintenanceBoard.state.repo!, issue, who, images);
-                await maintenanceBoard.queue(issue.number, true, as);
-                displayPrompt = `Implement Agent Office issue #${issue.number}: ${issue.title}\n${issue.url}\n\n${request}`;
-                prompt = maintenanceImages.prompt(displayPrompt, images);
-              }
               if (maintenanceIssue && maintenanceBoard.state.repo) maintenanceWork.queue(maintenanceBoard.state.repo, { number: maintenanceIssue, title: maintenanceBoard.state.items.find(i => i.number === maintenanceIssue)?.title ?? `Issue #${maintenanceIssue}`, url: `https://github.com/${maintenanceBoard.state.repo}/issues/${maintenanceIssue}` }, who, images);
               const r = target.workers.station(deskId, who, prompt, c.accountId, stationChat, pick);
-              if (typeof r === 'string') reply(quickFix ? `${r} Tracking issue #${maintenanceIssue} is in Work; start it there without creating another issue.` : r);
+              if (typeof r === 'string') reply(r);
               else {
-                if (images.length || quickFix) maintenanceHistory.capture(r.info, [{ id: randomBytes(16).toString('hex'), role: 'user', content: displayPrompt, attachments: images, by: who, at: Date.now(), pending: true }]);
+                if (images.length) maintenanceHistory.capture(r.info, [{ id: randomBytes(16).toString('hex'), role: 'user', content: displayPrompt, attachments: images, by: who, at: Date.now(), pending: true }]);
                 if (maintenanceIssue && maintenanceBoard.state.repo) {
                   maintenanceWork.start(maintenanceBoard.state.repo, maintenanceIssue, r.info, stack.state.changes.map(c => c.sha));
                 }
                 reply(undefined, r.info.id);
-                if (maintenanceIssue) {
-                  const number = maintenanceIssue;
-                  withGitHub(c, (as) => void (async () => {
-                    const error = await maintenanceBoard.claim(number, as);
-                    if (error) throw new Error(error);
-                    await maintenanceBoard.queue(number, false, as);
-                  })().catch((err) => warn(c, `Maintenance started, but updating GitHub failed: ${(err as Error).message}`)));
-                }
+                if (maintenanceIssue) withGitHub(c, (as) => void (async () => {
+                  const error = await maintenanceBoard.claim(maintenanceIssue, as);
+                  if (error) throw new Error(error);
+                  await maintenanceBoard.queue(maintenanceIssue, false, as);
+                })().catch((err) => warn(c, `Maintenance started, but updating GitHub failed: ${(err as Error).message}`)));
                 if (r.hired) toastFloor(floor, `${who} asked the ${r.info.name} something`);
               }
             }
-          } catch (err) { reply(quickFix && maintenanceIssue ? `${(err as Error).message} Tracking issue: https://github.com/${maintenanceBoard.state.repo}/issues/${maintenanceIssue}. Start this issue from Work; do not create it again.` : (err as Error).message); }
+          } catch (err) { reply((err as Error).message); }
           finally { if (maintenance) maintenanceStarting = false; }
         };
         if (deskId !== MAINTENANCE_DESK) {
@@ -2237,8 +2225,7 @@ export async function startServer(cfg: Config) {
         if (at && at.floor !== floor) {
           if (stack.state.phase === 'shipping') reply('The stack is being shipped or checked: wait for it to finish');
           else {
-            if (quickFix) withGitHub(c, as => void send(as), why => reply(why));
-            else void send();
+            void send();
           }
           break;
         }
@@ -2249,7 +2236,6 @@ export async function startServer(cfg: Config) {
         void stack.prepare().then((why) => {
           maintenanceTree.dir = stack.dir;
           if (why) reply(why);
-          else if (quickFix) withGitHub(c, as => void send(as), why => reply(why));
           else send();
         }).catch((err) => reply((err as Error).message));
         break;

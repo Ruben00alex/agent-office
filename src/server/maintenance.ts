@@ -92,3 +92,8 @@ export function runMaintenanceModel(prompt: string, model: string, opts: { codex
     if (cli === 'claude') child.stdin?.end(prompt); else child.stdin?.end();
   });
 }
+
+/** Fix now is an instruction to the agent, using the ordinary conversation transport. */
+export function maintenanceQuickFixPrompt(request: string): string {
+  return `${request}\n\n[Fix now]\nThe user explicitly authorizes you to implement this fix now. Check the Agent Office GitHub backlog for an existing issue first. Reuse a matching issue; otherwise create a GitHub issue documenting this request with maintenance_backlog (action=create, queue=false) or office-workers maintenance. Then implement it yourself in your existing Maintenance worktree without waiting for the user to queue or start the issue in the website. Include the issue link in your response and its number in your commit body so the work is traceable. Use the normal stack checks and commit flow; review and shipping remain human actions. Do not close the issue or ship the stack.`;
+}
