@@ -1253,7 +1253,7 @@ export type ClientMsg =
    * is how to move one off a model that's out of credits.
    */
   | { t: 'station.prompt'; deskId: string; prompt: string; newConversation?: boolean; maintenanceIssue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort }
-  | { t: 'maintenance.chat.send'; id: string; prompt: string; newConversation?: boolean; thread?: string; attachments?: string[]; maintenanceIssue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort }
+  | { t: 'maintenance.chat.send'; id: string; prompt: string; newConversation?: boolean; thread?: string; attachments?: string[]; quickFix?: boolean; maintenanceIssue?: number; provider?: AgentProvider; model?: string; effort?: AgentEffort }
   /** A message in the chat with the Product Lead on this floor (a conversation partner, see PRODUCT_DESK); answered with a `product.chat.sent`. */
   | { t: 'product.chat.send'; id: string; prompt: string; newConversation?: boolean; thread?: string; provider?: AgentProvider; model?: string; effort?: AgentEffort }
   /** A question for the maintenance closet's laptop (a small model that knows the office's source); `id` comes back on the `maintenance.answer`. */

@@ -112,7 +112,8 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
   const sendBtn = h('button.btn.primary.lp-send', { type: 'submit', 'aria-label': 'Send' }, '➤') as HTMLButtonElement;
   const model = providerPicker(store.project, `lite-${cfg.kind}-provider`, 'Runs on', () => (newConversation || view === 'work' ? undefined : workerChoice(state?.worker)));
   model.element.addEventListener('click', () => setTimeout(controls));
-  const form = h('form.lp-compose', {}, attach, input, sendBtn);
+  const fixBtn = maintenance ? h('button.btn', { type: 'submit', title: 'Create a tracking issue and start this fix', 'aria-label': 'Fix now' }, 'Fix now') as HTMLButtonElement : null;
+  const form = h('form.lp-compose', {}, attach, input, fixBtn, sendBtn);
   const subview = h('div.lp-subview.hidden');
   // The Work view's controls (add, refresh, start next) stay above its issue list instead of scrolling away with it.
   const workHead = h('div.lp-workhead.hidden');
@@ -319,6 +320,7 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
     input.disabled = !!pending || archived || !state || historyFailed;
     images?.disable(input.disabled);
     sendBtn.disabled = input.disabled || !!images?.uploading || (waiting && !model.edited()) || (newConversation && busy) || state?.stack?.phase === 'shipping' || state?.stack?.validation?.phase === 'running';
+    if (fixBtn) fixBtn.disabled = sendBtn.disabled || busy || !input.value.trim();
     const say = newConversation
       ? waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯${maintenance ? '' : ', or End the session to start fresh'}.` : busy ? (maintenance ? 'Wait for the current reply to finish before starting a new conversation.' : 'Use End the session in ⋯ to stop the reply and start fresh.') : 'New conversation: the earlier ones stay in History.'
       : archived ? 'An earlier conversation, read-only. Open History to go back to the current one.'
@@ -459,6 +461,8 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
+    const quickFix = !!fixBtn && (e as SubmitEvent).submitter === fixBtn;
+    if (quickFix && fixBtn?.disabled) return;
     const text = input.value.trim() || (images?.images.length ? 'Please inspect the attached screenshots.' : '');
     if (!text || sendBtn.disabled || !model.valid()) return;
     showError('');
@@ -472,12 +476,13 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
       t: cfg.sendType,
       id,
       prompt: text,
+      ...(quickFix ? { quickFix: true } : {}),
       ...(maintenance ? { attachments: images?.images.map((i) => i.id) } : {}),
       ...(model.edited() ? { provider: model.value(), model: model.model(), effort: model.effort() } : {}),
       ...(newConversation ? { newConversation: true } : { thread: maintenance ? (selected ?? state?.worker?.id) : selected }),
     } as never);
   });
-  input.addEventListener('input', saveDraft);
+  input.addEventListener('input', () => { saveDraft(); controls(); });
   images?.bind(frame.bottom);
 
   const offs = [on('workers', () => void refresh())];

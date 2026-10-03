@@ -108,6 +108,18 @@ try {
     await page.evaluate(() => closeHost());
     assert.ok(await page.evaluate(() => sent.some(message => message.t === 'worker.detach')));
   }
+  for (const host of ['3d', 'lite']) {
+    await page.evaluate(host => openHost(host), host);
+    await page.getByRole('tab', { name: /💬 Chat/ }).click();
+    await input.fill('Fix the cramped spacing');
+    await page.getByRole('button', { name: 'Fix now', exact: true }).click();
+    const fix = await page.evaluate(() => sent.filter(message => message.t === 'maintenance.chat.send').at(-1));
+    assert.equal(fix.quickFix, true);
+    assert.equal(fix.prompt, 'Fix the cramped spacing');
+    assert.equal(fix.maintenanceIssue, undefined);
+    await page.screenshot({ path: `/tmp/maintenance-quick-fix-${host}.png`, animations: 'disabled' });
+    await page.evaluate(() => closeHost());
+  }
   assert.equal(await page.evaluate(() => sent.some(message => message.t === 'worker.kill')), false);
   assert.deepEqual(errors, []);
   console.log('Passed: both hosts use shared tabs/actions/console, cross-view text and screenshot drafts, legacy migration, read-only archive, corrections, nested Esc, issue dispatch and cleanup.');
