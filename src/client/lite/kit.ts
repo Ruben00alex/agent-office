@@ -1,6 +1,6 @@
 // Small building blocks for the 2D view's pages: touch-sized rows, cards, segmented tabs, empty states.
 
-import { h } from '../ui/dom';
+import { h, openModal } from '../ui/dom';
 
 type Kid = Node | string | null | undefined | false;
 
@@ -101,28 +101,10 @@ export interface Sheet {
  * a short form, so choosing never costs you your place. Tap outside, ✕ or Esc closes it.
  */
 export function openSheet(opts: { title: string; body: HTMLElement; tall?: boolean; onClose?: () => void }): Sheet {
-  const root = document.getElementById('modal-root')!;
-  let closed = false;
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    window.removeEventListener('keydown', onKey, true);
-    backdrop.classList.add('leaving');
-    setTimeout(() => backdrop.remove(), 160);
-    opts.onClose?.();
-  };
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || root.lastElementChild !== backdrop) return;
-    e.preventDefault();
-    e.stopPropagation();
-    close();
-  };
-  const x = h('button.btn.close', { type: 'button', 'aria-label': 'Close', onclick: close }, '✕');
-  const sheet = h('div.sheet', { role: 'dialog', 'aria-label': opts.title, class: opts.tall ? 'tall' : '' }, h('div.sheet-grab', { 'aria-hidden': 'true' }), h('header.sheet-head', {}, h('b', {}, opts.title), x), h('div.sheet-body', {}, opts.body));
-  const backdrop = h('div.sheet-backdrop', { onmousedown: ((e: Event) => e.target === backdrop && close()) as EventListener }, sheet);
-  root.append(backdrop);
-  window.addEventListener('keydown', onKey, true);
-  return { close, el: sheet };
+  const sheet = h('div.sheet', { role: 'dialog', 'aria-label': opts.title, class: opts.tall ? 'tall' : '' }, h('div.sheet-grab', { 'aria-hidden': 'true' }), h('header.sheet-head', {}, h('b', {}, opts.title)), h('div.sheet-body', {}, opts.body));
+  const modal = openModal(sheet, { onClose: opts.onClose });
+  modal.backdrop.classList.add('sheet-backdrop');
+  return { close: modal.close, el: sheet };
 }
 
 /** A round, thumb-sized button with just an icon. */
