@@ -111,7 +111,7 @@ export function workPanelParts(state: MaintenanceChatState, send: (message: Clie
   const blocked = busy || work.some(i => i.status === 'running') || state.stack?.phase === 'shipping' || state.stack?.validation?.phase === 'running';
   const startIssue = (issue: typeof queued[number]) => start(work.find(i => i.number === issue.number) ?? { repo: github.repo ?? '', number: issue.number, title: issue.title, url: issue.url, status: 'queued', by: issue.author, at: 0, attachments: [], commits: [] });
   head.append(h('div.maintenance-section-heading', {}, h('div', {}, h('h3', {}, 'Engineering backlog'), h('p', {}, `${github.repo ?? 'Agent Office'} · GitHub issues`)),
-    h('button', { type: 'button', onclick: () => openMaintenanceIssueCreate(refresh) }, '+ Add issue'),
+    h('span.maintenance-add-wrap', {}, h('span.maintenance-add-orb', { 'aria-hidden': 'true' }), h('button.maintenance-add-issue', { type: 'button', onclick: () => openMaintenanceIssueCreate(refresh) }, '+ Add issue')),
     h('button', { type: 'button', onclick: () => send({ t: 'maintenance.issues' }) }, 'Refresh issues')), error,
     h('div.maintenance-work-intro', {}, h('button', { type: 'button', disabled: blocked || !queued.length || !!github.error || github.loading, onclick: () => startIssue(queued[0]) }, 'Start next queued issue'),
       h('p', {}, 'Tell Maintenance what to capture or queue in Conversation. Queued issues carry the maintenance:queued label on GitHub; the oldest issue starts first.')));
@@ -131,9 +131,9 @@ export function workPanelParts(state: MaintenanceChatState, send: (message: Clie
       }
       if (issue.state === 'OPEN') {
         const inQueue = maintenanceQueued(issue);
-        card.append(h('button', { type: 'button', disabled: item?.status === 'running', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, ...(inQueue ? { remove: true } : { attachments: item?.attachments.map(i => i.id) ?? [] }) })) }, inQueue ? 'Remove from queue' : 'Queue for Maintenance'));
-        if (inQueue) card.append(h('button', { type: 'button', disabled: blocked || !!github.error || github.loading, onclick: () => (!issue.doneBy || confirm(`#${issue.number} looks already done (${issue.doneBy}) but is still open. Start Maintenance on it anyway?`)) && startIssue(issue) }, 'Start issue'));
-        if (item?.status === 'review') card.append(h('button', { type: 'button', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, reviewed: true })) }, 'Mark agent work reviewed'));
+        card.append(h(inQueue ? 'button.is-danger' : 'button.is-primary', { type: 'button', disabled: item?.status === 'running', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, ...(inQueue ? { remove: true } : { attachments: item?.attachments.map(i => i.id) ?? [] }) })) }, inQueue ? 'Remove from queue' : 'Queue for Maintenance'));
+        if (inQueue) card.append(h('button.is-primary', { type: 'button', disabled: blocked || !!github.error || github.loading, onclick: () => (!issue.doneBy || confirm(`#${issue.number} looks already done (${issue.doneBy}) but is still open. Start Maintenance on it anyway?`)) && startIssue(issue) }, 'Start issue'));
+        if (item?.status === 'review') card.append(h('button.is-primary', { type: 'button', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, reviewed: true })) }, 'Mark agent work reviewed'));
       }
       if (item?.attachments.length) card.append(imageEvidence(item.attachments));
       for (const commit of item?.commits ?? []) card.append(h('button', { type: 'button', onclick: () => openStackChange(commit, { correct, watch() {} }) }, `${commit.sha} · ${commit.subject}`));

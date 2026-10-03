@@ -1496,9 +1496,29 @@ a.when:hover { text-decoration: underline; }
 .maintenance-work-card { border: 1px solid #e0e5ef; border-radius: 10px; padding: 14px; margin-bottom: 10px; background: #fff; overflow-wrap: anywhere; }
 .maintenance-work-card { cursor: pointer; }
 .maintenance-work-card:hover { border-color: #c5cde0; }
-.maintenance-work-card > a { display: block; font-weight: 600; color: #4564c7; text-decoration: none; }
+.maintenance-work-card > a { display: inline-block; margin: 2px 0 4px; padding: 2px 6px; margin-left: -6px; border-radius: 8px; font-weight: 700; color: #4564c7; text-decoration: none; transition: background-color .1s, transform .1s; }
+.maintenance-work-card > a:hover { background: #eef2ff; transform: translateY(-1px); }
+.maintenance-work-card > a:active { transform: scale(.96); }
 .maintenance-work-card small { display: block; color: #788193; margin: 4px 0 10px; }
-.maintenance-work-card button { margin: 4px 6px 0 0; font-size: 12px; }
+.maintenance-work-card button, .maintenance-work-head button { margin: 4px 6px 0 0; padding: 5px 11px; font: 800 12px/1.3 inherit; font-family: inherit; color: var(--ink); background: #fff; border: 2px solid var(--ink); border-radius: 10px; cursor: pointer; box-shadow: 0 2px 0 var(--ink); transition: transform .1s, box-shadow .1s, background-color .1s, filter .1s; }
+.maintenance-work-card button:hover:not(:disabled), .maintenance-work-head button:hover:not(:disabled) { background: var(--paper-2); transform: translateY(-1px); box-shadow: 0 3px 0 var(--ink); }
+.maintenance-work-card button:active:not(:disabled), .maintenance-work-head button:active:not(:disabled) { transform: translateY(2px) scale(.97); box-shadow: 0 0 0 var(--ink); }
+.maintenance-work-card button:disabled, .maintenance-work-head button:disabled, .maintenance-work-intro button:disabled { opacity: .5; cursor: default; }
+.maintenance-work-card button.maintenance-issue-title { display: block; max-width: 100%; margin: 0 0 4px; padding: 6px 12px; font-size: 13px; text-align: left; background: var(--paper-2); }
+.maintenance-work-card button.is-primary, .maintenance-work-intro button, .maintenance-work-head .maintenance-add-issue { background: var(--accent); color: #fff; }
+.maintenance-work-card button.is-primary:hover:not(:disabled), .maintenance-work-intro button:hover:not(:disabled), .maintenance-work-head .maintenance-add-issue:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.maintenance-work-card button.is-danger { background: var(--bad); color: #fff; }
+.maintenance-work-card button.is-danger:hover:not(:disabled) { background: var(--bad); filter: brightness(1.08); }
+.maintenance-work-intro button { margin: 0; padding: 6px 12px; font: 800 12px/1.3 inherit; font-family: inherit; border: 2px solid var(--ink); border-radius: 10px; box-shadow: 0 2px 0 var(--ink); cursor: pointer; transition: transform .1s, box-shadow .1s, filter .1s; }
+.maintenance-work-intro button:active:not(:disabled) { transform: translateY(2px) scale(.97); box-shadow: 0 0 0 var(--ink); }
+.maintenance-add-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.maintenance-add-orb { position: relative; width: 14px; height: 14px; margin: 4px 4px 0 0; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ffe2b8, var(--accent) 60%, #e0561a); box-shadow: 0 0 8px var(--accent); animation: maintenance-orb 2.4s ease-in-out infinite; pointer-events: none; }
+.maintenance-add-orb::before, .maintenance-add-orb::after { content: '✦'; position: absolute; font-size: 8px; color: var(--accent); animation: maintenance-sparkle 2.4s ease-in-out infinite; }
+.maintenance-add-orb::before { top: -8px; right: -7px; }
+.maintenance-add-orb::after { bottom: -8px; left: -7px; animation-delay: 1.2s; }
+@keyframes maintenance-orb { 0%, 100% { transform: scale(.85); } 50% { transform: scale(1.15) translateY(-2px); } }
+@keyframes maintenance-sparkle { 0%, 60%, 100% { opacity: 0; transform: scale(.4) rotate(0); } 30% { opacity: 1; transform: scale(1) rotate(90deg); } }
+@media (prefers-reduced-motion: reduce) { .maintenance-add-orb, .maintenance-add-orb::before, .maintenance-add-orb::after { animation: none; } }
 .maintenance-chat .maintenance-issue-title { display: block; text-align: left; border: 0; padding: 0; font-size: 14px; font-weight: 600; }
 .maintenance-muted { color: #788193; font-size: 12px; }
 .maintenance-image-composer { margin: 8px 0; }

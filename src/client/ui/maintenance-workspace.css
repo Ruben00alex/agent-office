@@ -7,6 +7,7 @@
 .lp-seg .n { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; line-height: 20px; }
 
 .lp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-actions a.btn { flex: 0 0 auto; }
 .lp-actions .btn { min-height: 44px; flex: 1 1 auto; justify-content: center; white-space: normal; text-align: center; text-decoration: none; }
 .lp-bar { display: flex; flex-direction: column; gap: 8px; }
 .lp-bar .provider-pick { margin: 0; }
