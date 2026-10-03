@@ -72,6 +72,7 @@ export function openServices() {
           : 'Web servers the workers are running. Click one to copy a command that opens it on your computer — run it in a terminal and the page opens by itself.',
       ),
     );
+    if (s.tailnetProblem) body.append(h('p.note', { style: 'margin:0 0 12px;color:#c1121f;font-weight:700' }, `⚠️ ${s.tailnetProblem}`));
     if (!s.items.length) {
       body.append(
         h(

@@ -800,7 +800,9 @@ export async function startServer(cfg: Config) {
   await Promise.all([...floors.values()].map((f) => f.ready));
 
   const team = new Team(cfg.publicHost, cfg.port, cfg.tailnet);
-  const tailnet = new Tailnet(cfg.tailnet);
+  const tailnet = new Tailnet(cfg.tailnet, () => {
+    for (const c of clients.values()) sendTo(c, { t: 'services', state: servicesState(floorOf(c)) });
+  });
 
   // Web servers the workers start, for the Services board and service tunnels (see relay.ts).
   // One scan covers every floor; each floor's board lists its own workers' servers.
@@ -810,6 +812,7 @@ export async function startServer(cfg: Config) {
     deploy: cfg.deployScript,
     ssh: team.ssh,
     tailnet: cfg.tailnet,
+    tailnetProblem: tailnet.problem || undefined,
   });
   const services = new Services(
     () => [...floors.values()].flatMap((f) => f.workers.owners()),

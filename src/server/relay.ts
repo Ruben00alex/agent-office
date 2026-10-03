@@ -25,7 +25,12 @@ export function tunneledPort(req: http.IncomingMessage, officePort: number, tail
   if (req.headers[RELAYED]) return undefined;
   const host = req.headers.host ?? '';
   const m = LOOPBACK_HOST.exec(host);
-  const port = m ? Number(m[1]) : tailnetPort(host, tailnet);
+  let port = m ? Number(m[1]) : tailnetPort(host, tailnet);
+  // Tailscale Serve may rewrite Host to its backend's; X-Forwarded-Host keeps the name the visitor used.
+  if ((!port || port === officePort) && tailnet) {
+    const fwd = req.headers['x-forwarded-host'];
+    port = tailnetPort(String(Array.isArray(fwd) ? fwd[0] : (fwd ?? '')).split(',')[0].trim(), tailnet);
+  }
   return port && port !== officePort ? port : undefined;
 }
 

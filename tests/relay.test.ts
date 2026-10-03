@@ -26,6 +26,14 @@ test("on the tailnet, <office>.ts.net:<port> is that worker's server, and the of
   assert.equal(tunneledPort(req(`${TAILNET}:5173`, { 'x-agent-office-relay': '1' }), 4600, TAILNET), undefined);
 });
 
+test('when Serve rewrites Host, X-Forwarded-Host still names the port', () => {
+  const fwd = { 'x-forwarded-host': `${TAILNET}:5173` };
+  assert.equal(tunneledPort(req('127.0.0.1:4600', fwd), 4600, TAILNET), 5173);
+  assert.equal(tunneledPort(req('office:4600', fwd), 4600, TAILNET), 5173);
+  assert.equal(tunneledPort(req('office:4600', fwd), 4600), undefined);
+  assert.equal(tunneledPort(req('office:4600', { 'x-forwarded-host': TAILNET }), 4600, TAILNET), undefined);
+});
+
 test('from the tailnet, the worker\'s server gets a localhost Host and no office cookie', async () => {
   let seen: http.IncomingHttpHeaders = {};
   const upstream = http.createServer((r, res) => {

@@ -976,6 +976,8 @@ export interface ServicesState {
   ssh?: string;
   /** The office's name on its Tailscale network: each server is also on https://<it>:<port> there. */
   tailnet?: string;
+  /** Why those links won't work right now (Tailscale Serve missing or failing), when they won't. */
+  tailnetProblem?: string;
 }
 
 export type ChangeStatus = 'M' | 'A' | 'D' | 'R' | 'T' | '?';

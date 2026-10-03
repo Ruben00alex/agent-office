@@ -17,12 +17,22 @@ export class Tailnet {
   private wanted: number[] = [];
   private busy = false;
   private lastError = '';
+  /** Why the workers' servers aren't reachable on the tailnet, for the Services board; '' when all is well. */
+  problem = '';
   private timer?: NodeJS.Timeout;
 
   constructor(
     /** e.g. agent-office.tail1234.ts.net, or undefined when the office isn't on a tailnet. */
     readonly host: string | undefined,
+    /** Called when `problem` changes. */
+    private onProblem: () => void = () => {},
   ) {}
+
+  private setProblem(problem: string) {
+    if (problem === this.problem) return;
+    this.problem = problem;
+    this.onProblem();
+  }
 
   /** Once the workers' servers are known, drop ports a previous office left behind. */
   start(ports: () => number[]) {
@@ -37,7 +47,11 @@ export class Tailnet {
 
   /** Serve exactly these workers' ports on the tailnet, and stop serving any others. */
   sync(ports: number[]) {
-    if (!this.host || !existsSync(HELPER)) return;
+    if (!this.host) return;
+    if (!existsSync(HELPER)) {
+      this.setProblem(`${HELPER} isn't installed, so workers' servers can't be served on the tailnet. Run deploy/provision.sh --tailscale again.`);
+      return;
+    }
     this.wanted = [...new Set(ports)].sort((a, b) => a - b);
     void this.flush();
   }
@@ -53,9 +67,11 @@ export class Tailnet {
         if (err) {
           if (err !== this.lastError) console.warn(`[agent-office] couldn't serve workers' servers on the tailnet: ${err}`);
           this.lastError = err;
+          this.setProblem(`Tailscale Serve refused to serve the workers' servers: ${err.slice(0, 300)}`);
           break; // the next change tries again
         }
         this.lastError = '';
+        this.setProblem('');
         this.served = want;
       }
     } finally {

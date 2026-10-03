@@ -118,6 +118,8 @@ Anyone on your tailnet opens the link. There's no terminal to keep open, and no 
 - `status` shows the link.
 - `destroy` signs the machine out of your tailnet before it deletes it. If it's still listed on the Machines page, remove it there.
 
+**Workers' servers on the tailnet.** Each web server a worker starts (see 🌐 Services) gets its own link, `https://agent-office.<your-tailnet>.ts.net:<port>`. The office asks Tailscale Serve, through the `/usr/local/bin/agent-office-serve` helper that `provision.sh --tailscale` installs, to point that port at the office, which relays it to the worker's `localhost:<port>` once you're signed in. If the helper is missing or Serve refuses, the Services board shows a ⚠️ line saying why; the office log has the same message. Check that MagicDNS and HTTPS Certificates are on, that your access controls let you reach the machine on those ports, and rerun `deploy/aws.sh up --tailscale` to reinstall the helper.
+
 **Key expiry.** Tailscale expires a machine's key after 180 days, and then the office drops off your tailnet. On the Machines page, pick the machine, then **⋯ → Disable key expiry**. An auth key with a tag avoids this too, because tagged machines don't expire (the tag has to be in your policy's `tagOwners`).
 
 **Moving an existing office over.** Run `deploy/aws.sh up --tailscale` on it. Running `up` later keeps it on the tailnet, even without the flag. People you invited by SSH key can still tunnel in until you remove them in **👥 Invite teammates**.
