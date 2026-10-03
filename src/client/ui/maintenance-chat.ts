@@ -226,12 +226,12 @@ export function openMaintenanceChat(send: (message: ClientMsg) => void, actions:
     });
   }
 
-  /** Read-only stack summary under the console: recent commits, the last check and the session's tokens. */
+  /** Read-only stack summary under the console: all commits, the last check and the session's tokens. */
   function drawStackPanel() {
     const stack = state?.stack ?? store.maintenance;
     const worker = state?.worker;
     const v = stack.validation;
-    const recent = [...stack.changes].reverse().slice(0, 3);
+    const recent = [...stack.changes].reverse();
     const checks = v?.phase === 'running' ? h('span.maintenance-rail-badge', {}, `Checking: ${v.step ?? 'Starting'}…`)
       : v ? h('span.maintenance-rail-badge', { class: v.phase === 'passed' ? 'good' : 'bad' }, `${v.phase === 'passed' ? '✓' : '✕'} Checks ${v.phase}`, h('small', {}, ` · ${new Date(v.finishedAt ?? v.at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`))
       : h('p.maintenance-muted', {}, 'Ready. Run checks before shipping.');
