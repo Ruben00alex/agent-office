@@ -1544,7 +1544,12 @@ a.when:hover { text-decoration: underline; }
 .maintenance-review-view .maintenance-diff { max-height: 500px; overflow: auto; font-size: 12px; }
 /* The Product Lead's chat: the Maintenance workspace's conversation without its console, work and review panes. */
 .modal.product-chat { width: min(980px, 100%); }
-.product-chat .maintenance-chat-layout { grid-template-columns: 240px minmax(0, 1fr); }
+/* No console rail here, so the narrow-window rules that let the Maintenance workspace grow and scroll must not
+   apply: the layout stays one bounded row and the message list scrolls inside it, at any window width. */
+@media (min-width: 701px) {
+  .modal.product-chat .maintenance-chat-layout { grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  .modal.product-chat .maintenance-chat-main { min-height: 0; }
+}
 @media (max-width: 1150px) {
   .maintenance-chat-layout { grid-template-columns: 180px minmax(0, 1fr); overflow-y: auto; }
   .maintenance-console-rail { grid-column: 1 / -1; min-height: 370px; border-left: 0; border-top: 1px solid #e7eaf0; }
