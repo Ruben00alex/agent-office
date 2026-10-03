@@ -13,11 +13,11 @@ const numbers = (ps: GhPull[]) => ps.map((p) => p.number);
 for (const linksFail of [false, true]) test(`PR board loads with CLI-supported fields when link enrichment ${linksFail ? 'fails' : 'succeeds'}`, async () => {
   const github = new GitHub('.', () => {}, () => {});
   (github as any).run = async (args: string[]) => {
-    if (args[0] === 'issue') return '[]';
+    if (args[0] === 'issue') return JSON.stringify(args.includes('open') ? [28, 29].map(number => ({ number, state: 'OPEN', title: `Issue ${number}` })) : []);
     if (args[0] === 'pr') {
       assert.ok(!args[args.indexOf('--json') + 1].split(',').includes('closingIssuesReferences'), 'gh pr list rejects this field');
       const state = args[args.indexOf('--state') + 1];
-      return JSON.stringify(state === 'open' ? [pull(1, 'OPEN')] : [pull(2, 'MERGED')]);
+      return JSON.stringify(state === 'open' ? [pull(1, 'OPEN')] : [{ ...pull(2, 'MERGED'), body: 'Closes other/project#29\nFixes #28' }]);
     }
     if (args[0] === 'repo') return JSON.stringify({ nameWithOwner: 'team/office' });
     if (linksFail) throw new Error('GraphQL unavailable');
@@ -32,6 +32,8 @@ for (const linksFail of [false, true]) test(`PR board loads with CLI-supported f
   assert.equal(github.pulls.loading, false);
   assert.deepEqual(numbers(github.pulls.items), [1, 2]);
   assert.deepEqual(github.pulls.items[1].closes, linksFail ? [] : [28]);
+  assert.equal(github.issues.items.find(i => i.number === 28)?.doneBy, linksFail ? undefined : 'PR #2 merged');
+  assert.equal(github.issues.items.find(i => i.number === 29)?.doneBy, undefined, 'another repository’s reference cannot complete this issue');
 });
 
 test('a pull request that was open at the last look and is merged now rings once', () => {

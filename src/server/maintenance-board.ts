@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { MaintenanceIssues } from '../shared/protocol.js';
-import { GitHub, gh, referencesIssue } from './github.js';
+import { GitHub, gh } from './github.js';
 import { originRepo } from './building.js';
 import type { GhAs } from './signins.js';
 import { MAINTENANCE_QUEUE_LABEL, maintenanceQueued } from '../shared/maintenance-issues.js';
@@ -37,19 +37,10 @@ export class MaintenanceBoard {
     this.emit(this.state);
   }
 
-  /** Looks through origin's default branch for commits that address an open issue, or that Maintenance made for it. */
+  /** Only recorded Maintenance work proves a commit belongs to an issue in this repository. */
   private async findShipped() {
     if (!this.source) return;
-    const git = (args: string[]) => new Promise<string>((resolve) => execFile('git', args, { cwd: this.source, maxBuffer: 8 * 1024 * 1024 }, (err, out) => resolve(err ? '' : out)));
-    const log = await git(['log', '-n', '400', '--format=%h%x00%B%x01', 'origin/HEAD']);
-    if (!log) return;
-    const messages = log.split('\x01').map((m) => m.trim()).filter(Boolean);
     const found = new Map<number, string>();
-    for (const issue of this.state.items) {
-      if (issue.state !== 'OPEN') continue;
-      const hit = messages.find((m) => referencesIssue(m, issue.number));
-      if (hit) found.set(issue.number, `commit ${hit.split('\0')[0]} on main`);
-    }
     for (const w of this.workCommits()) {
       if (found.has(w.number) || !/^[a-f0-9]{7,40}$/.test(w.sha)) continue;
       const ok = await new Promise<boolean>((resolve) => execFile('git', ['merge-base', '--is-ancestor', w.sha, 'origin/HEAD'], { cwd: this.source }, (err) => resolve(!err)));
@@ -57,7 +48,8 @@ export class MaintenanceBoard {
     }
     const same = found.size === this.shipped.size && [...found].every(([k, v]) => this.shipped.get(k) === v);
     this.shipped = found;
-    if (!same) this.set(this.state);
+    // Reapply evidence to GitHub's undecorated items, so removed evidence clears old badges.
+    if (!same) this.set({ ...this.state, items: this.github?.issues.items ?? this.state.items });
   }
 
   start() {

@@ -4,10 +4,6 @@ import type { GhAs } from './signins.js';
 
 const REFRESH_MS = 90_000;
 
-/** Whether some text says it closes, fixes, resolves or implements issue `n`. */
-export function referencesIssue(text: string, n: number): boolean {
-  return new RegExp(`\\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|implement(?:s|ed)?|address(?:es|ed)?)\\s*:?\\s+(?:[\\w.-]+/[\\w.-]+)?#${n}\\b`, 'i').test(text);
-}
 /** How long the repo's list of labels is kept before the label picker asks GitHub again. */
 const LABELS_MS = 60_000;
 
@@ -452,7 +448,7 @@ export class GitHub {
             linked.set(n, nodes.filter((i: any) => i.repository?.nameWithOwner === nameWithOwner).map((i: any) => Number(i.number)).filter((i: number) => Number.isSafeInteger(i) && i > 0));
           }
         } catch {
-          // Closing keywords in the title/body still identify completed issues.
+          // Without repository-scoped links, do not infer completion from message numbers.
         }
       }
       const fetched: GhPull[] = all.map((p: any) => ({
@@ -490,7 +486,7 @@ export class GitHub {
   }
 
   /**
-   * Flags open issues a merged PR already addressed (it closes them, or says "fixes #n" and the like).
+   * Flags open issues GitHub explicitly links to a merged PR in this repository.
    * GitHub only closes the ones merged into the default branch with a keyword, so others stay open and
    * get handed to a worker who finds the work done.
    */
@@ -498,7 +494,7 @@ export class GitHub {
     const merged = this.pulls.items.filter((p) => p.state === 'MERGED');
     return items.map((i) => {
       if (i.state !== 'OPEN') return i.doneBy ? { ...i, doneBy: undefined } : i;
-      const pr = merged.find((p) => p.closes.includes(i.number) || referencesIssue(`${p.title}\n${p.body}`, i.number));
+      const pr = merged.find((p) => p.closes.includes(i.number));
       const doneBy = pr ? `PR #${pr.number} merged` : undefined;
       return doneBy === i.doneBy ? i : { ...i, doneBy };
     });
