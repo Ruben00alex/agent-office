@@ -1546,9 +1546,17 @@ a.when:hover { text-decoration: underline; }
 .modal.product-chat { width: min(980px, 100%); }
 /* No console rail here, so the narrow-window rules that let the Maintenance workspace grow and scroll must not
    apply: the layout stays one bounded row and the message list scrolls inside it, at any window width. */
-@media (min-width: 701px) {
-  .modal.product-chat .maintenance-chat-layout { grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
-  .modal.product-chat .maintenance-chat-main { min-height: 0; }
+.modal.product-chat .maintenance-chat-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.modal.product-chat .maintenance-chat-main { min-height: 0; max-height: none; overflow: hidden; }
+.modal.product-chat > header,
+.modal.product-chat .maintenance-chat-composer,
+.modal.product-chat .maintenance-chat-main > .provider-pick { flex-shrink: 0; }
+@media (max-width: 700px) {
+  .modal.product-chat .maintenance-chat-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, min(160px, 22dvh)) minmax(0, 1fr); }
+  .modal.product-chat aside { overflow: auto; }
+}
+@media (max-width: 700px) and (max-height: 600px) {
+  .modal.product-chat .maintenance-chat-layout { grid-template-rows: 70px minmax(0, 1fr); }
 }
 @media (max-width: 1150px) {
   .maintenance-chat-layout { grid-template-columns: 180px minmax(0, 1fr); overflow-y: auto; }

@@ -147,7 +147,7 @@
 .modal.maintenance-chat:not(.product-chat) .maintenance-conversation small { display: block; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .modal.maintenance-chat:not(.product-chat) .lite-maintenance-workspace { min-width: 0; min-height: 0; }
 .modal.maintenance-chat:not(.product-chat) .maintenance-chat-main { min-height: 0; max-height: none; padding: 12px var(--gutter) 0; overflow: hidden; }
-.maintenance-chat .maintenance-chat-messages { padding: 0; overflow: visible; flex: none; }
+.maintenance-chat:not(.product-chat) .maintenance-chat-messages { padding: 0; overflow: visible; flex: none; }
 .maintenance-chat .lp-msg { min-width: 0; }
 .maintenance-chat .lp-bubble { max-width: 100%; }
 .maintenance-chat .lp-bottom { margin-top: auto; }
