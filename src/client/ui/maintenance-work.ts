@@ -12,11 +12,12 @@ export { maintenancePost } from './maintenance-issue-crafter';
 /** + Add issue everywhere opens the crafter, carrying on any conversation this browser has going. */
 export function openMaintenanceIssueCreate(saved: () => void) { return openIssueCrafter({ saved }); }
 
-/** A GitHub label as a chip in its own color, with readable text on it. */
+/** A GitHub label as a chip tinted with its own color, the text darkened from it so it stays readable. */
 export function labelChip(label: GhLabel) {
   const hex = (label.color ?? '').replace('#', '').padEnd(6, '0').slice(0, 6);
   const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) || 0);
-  return h('span.issue-tag', { style: `background:#${hex};color:${r * 0.299 + g * 0.587 + b * 0.114 > 150 ? '#2b2d42' : '#fff'}` }, label.name);
+  const text = `rgb(${[r, g, b].map(c => Math.round(c * 0.45)).join(',')})`;
+  return h('span.issue-tag', { style: `background:#${hex}2e;border-color:#${hex}66;color:${text}` }, label.name);
 }
 
 const LANE_ORDER: MaintenanceLane[] = ['progress', 'review', 'queued', 'open', 'closed'];

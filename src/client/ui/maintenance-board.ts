@@ -77,7 +77,7 @@ export function openMaintenanceBoard(send: (msg: ClientMsg) => void, correct: (c
       const cards = h('ul');
       // Closed issues pile up forever on GitHub: the board keeps the latest few.
       (column.lane === 'closed' ? column.items.slice(0, 8) : column.items).forEach((issue) => cards.append(h('li.maintenance-card', {}, h('button.maintenance-note', {
-        type: 'button', title: issue.title, style: `background:${['#fff7b0', '#ffd6e0', '#caffbf', '#bde0fe', '#ffe5b4'][issue.number % 5]}`,
+        type: 'button', title: issue.title, 'data-lane': column.lane,
         onclick: () => openMaintenanceIssue(issue, correct, send),
       }, h('strong', {}, `#${issue.number}`), h('span', {}, issue.title), ...(issue.doneBy && issue.state === 'OPEN' ? [h('small.done-flag', {}, `✅ ${issue.doneBy}, still open`)] : []),
         ...(issue.work?.status === 'running' ? [h('small.done-flag', {}, '🤖 Agent working')] : issue.work?.status === 'review' && issue.state === 'OPEN' ? [h('small.done-flag', {}, '🤖 Agent finished · review it')] : []),

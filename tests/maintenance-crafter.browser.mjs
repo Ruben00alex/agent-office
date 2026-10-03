@@ -57,6 +57,12 @@ try {
   assert.equal(await page.locator('details.lane-closed').getAttribute('open'), null, 'closed issues stay folded away');
   await page.locator('#work').screenshot({ path: '/tmp/maintenance-work-lanes.png', animations: 'disabled' });
 
+  // The wall board's window shows the same lanes as clean cards, recent closed issues only.
+  await page.evaluate(async () => { const board = await import('/ui/maintenance-board.ts'); window.boardModal = board.openMaintenanceBoard(() => {}, () => {}); });
+  await page.locator('.maintenance-columns').waitFor();
+  assert.deepEqual(await page.$$eval('.maintenance-columns h4', hs => hs.map(h => h.textContent.replace(/ · \d+$/, ''))), ['📥 Backlog', '⏳ Queued', '🚧 In progress', '👀 Needs review', '✅ Closed']);
+  await page.screenshot({ path: '/tmp/maintenance-wall-board.png', animations: 'disabled' });
+  await page.evaluate(() => window.boardModal.close());
   // The crafter: chat on the left, the issue filled in on the right.
   await page.evaluate(() => crafter.openIssueCrafter({ saved: () => { window.saved = true; } }));
   assert.equal(await page.getByRole('button', { name: 'Create issue' }).isDisabled(), true, 'a new issue is always the writer’s draft');
