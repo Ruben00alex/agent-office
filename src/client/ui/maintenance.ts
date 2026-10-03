@@ -16,52 +16,115 @@ export function onMaintenanceAnswer(msg: Extract<ServerMsg, { t: 'maintenance.an
   if (ask?.id === msg.id) ask.show(msg);
 }
 
-export function openLaptop(send: (msg: ClientMsg) => void) {
-  const ta = h('textarea', { rows: 3, placeholder: 'e.g. How does a worker get from the queue to a desk?', 'aria-label': 'Question' }) as HTMLTextAreaElement;
-  const out = h('div.laptop-out', { 'aria-live': 'polite' });
-  const submit = h('button.btn.primary', { type: 'submit' }, 'Ask 💬');
-  const form = h(
-    'form.modal.laptop',
-    { role: 'dialog', 'aria-label': 'Office laptop' },
-    h('header', {}, h('h2', {}, '💻 Ask about the office')),
-    h('div.body', {}, h('p.laptop-note', {}, `A small model (${MAINTENANCE_MODEL}) reads the office's own source and docs. To change something, tell the Maintenance agent at the counter.`), ta, out),
-    h('footer', {}, h('span.grow', {}, 'Enter to ask · Shift+Enter for a new line'), submit),
-  ) as HTMLFormElement;
-  form.noValidate = true;
-  const modal = openModal(form, { onClose: () => void (ask = null) });
+interface LaptopTurn { q: string; a: string; model: string; at: number }
+interface LaptopThread { id: string; title: string; updatedAt: number; turns: LaptopTurn[] }
+const ARCHIVE_KEY = 'agent-office.laptop.threads';
 
-  const busy = (on: boolean) => {
-    submit.disabled = on;
-    ta.disabled = on;
+// The archive lives in this browser: the server keeps nothing of the laptop's questions.
+function loadThreads(): LaptopThread[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((t) => t && typeof t.id === 'string' && Array.isArray(t.turns)) : [];
+  } catch { return []; }
+}
+function saveThreads(threads: LaptopThread[]) {
+  try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(threads.slice(0, 50))); } catch { /* private window or full: the chat still works */ }
+}
+
+export function openLaptop(send: (msg: ClientMsg) => void) {
+  let threads = loadThreads().sort((a, b) => b.updatedAt - a.updatedAt);
+  let current: LaptopThread = { id: `t${Date.now().toString(36)}`, title: '', updatedAt: Date.now(), turns: [] };
+  let waiting: string | null = null;
+
+  const ta = h('textarea', { rows: 1, maxlength: 4000, placeholder: 'e.g. How does a worker get from the queue to a desk?', 'aria-label': 'Question', enterkeyhint: 'send' }) as HTMLTextAreaElement;
+  const log = h('div.lp-chatlog.maintenance-chat-messages', { role: 'log', 'aria-label': 'Laptop conversation', 'aria-live': 'polite' });
+  const scroller = h('div.maintenance-chat-main', {}, log);
+  const send$ = h('button.btn.primary.lp-send', { type: 'submit', 'aria-label': 'Send' }, '➤') as HTMLButtonElement;
+  const form = h('form.lp-compose', {}, ta, send$) as HTMLFormElement;
+  form.noValidate = true;
+  const search = h('input', { type: 'search', placeholder: 'Search conversations', 'aria-label': 'Search laptop history' }) as HTMLInputElement;
+  const archive = h('div.maintenance-chat-archive');
+
+  const msg = (user: boolean, ...kids: (Node | string)[]) =>
+    h('article.lp-msg', { class: user ? 'from-user first' : 'from-agent first' }, h('div.lp-bubble.maintenance-bubble', {}, ...kids));
+  const paintLog = () => {
+    const rows: HTMLElement[] = [];
+    for (const t of current.turns) {
+      rows.push(msg(true, h('p.maintenance-user-text', {}, t.q)));
+      rows.push(msg(false, h('div.laptop-answer', {}, markdown(t.a)), h('p.laptop-model', {}, `— ${t.model}`)));
+    }
+    if (waiting) rows.push(msg(false, h('p.laptop-wait', {}, '⏳ Looking through the code…')));
+    log.replaceChildren(...(rows.length ? rows : [h('div.lp-chat-empty.maintenance-chat-empty', {}, h('h3', {}, 'Ask about the office'),
+      h('p', {}, `A small model (${MAINTENANCE_MODEL}) reads the office's own source and docs and never changes anything. Follow-ups keep the conversation's context. To change something, tell the Maintenance agent at the counter.`))]));
+    scroller.scrollTop = scroller.scrollHeight;
   };
+  const paintArchive = () => {
+    const q = search.value.trim().toLowerCase();
+    const hits = threads.filter((t) => !q || t.title.toLowerCase().includes(q) || t.turns.some((x) => x.q.toLowerCase().includes(q) || x.a.toLowerCase().includes(q)));
+    archive.replaceChildren(...hits.map((t) => h('button.maintenance-conversation', {
+      type: 'button', class: t.id === current.id ? 'selected' : '', 'aria-pressed': String(t.id === current.id),
+      onclick: () => { if (waiting) return; current = t; paintLog(); paintArchive(); ta.focus(); },
+    }, t.title, h('small', {}, `${new Date(t.updatedAt).toLocaleDateString()} · ${t.turns.length * 2} messages`))));
+    if (!hits.length) archive.replaceChildren(h('p.lp-note', {}, q ? 'No matching conversations' : 'Past conversations appear here.'));
+  };
+  const busy = (on: boolean) => { send$.disabled = on; ta.disabled = on; };
+  const remember = () => {
+    threads = [current, ...threads.filter((t) => t.id !== current.id)];
+    saveThreads(threads);
+  };
+
   const go = () => {
     const question = ta.value.trim();
-    if (!question || submit.disabled) return;
+    if (!question || waiting) return;
     const id = `q${Date.now().toString(36)}${counter++}`;
+    const thread = current;
+    const context = thread.turns.slice(-6).map(({ q, a }) => ({ q, a }));
+    waiting = id;
+    ta.value = '';
     busy(true);
-    out.replaceChildren(h('p.laptop-wait', {}, '⏳ Looking through the code…'));
+    log.append(msg(true, h('p.maintenance-user-text', {}, question)));
     ask = {
       id,
       show: (m) => {
+        waiting = null;
         busy(false);
-        if (m.error) out.replaceChildren(h('p.setting-note.bad', { role: 'alert' }, m.error));
-        else out.replaceChildren(h('div.laptop-answer', {}, markdown(m.answer ?? '')), h('p.laptop-model', {}, `— ${m.model}`));
+        if (m.error) {
+          ta.value = question;
+          paintLog();
+          log.append(h('p.lp-banner.bad', { role: 'alert' }, m.error));
+        } else {
+          thread.turns.push({ q: question, a: m.answer ?? '', model: m.model, at: Date.now() });
+          thread.updatedAt = Date.now();
+          if (!thread.title) thread.title = question.length > 60 ? `${question.slice(0, 57)}…` : question;
+          if (current === thread) { remember(); paintLog(); paintArchive(); }
+          else remember();
+        }
         ta.focus();
-        ta.select();
       },
     };
-    send({ t: 'maintenance.ask', id, question });
+    scroller.scrollTop = scroller.scrollHeight;
+    send({ t: 'maintenance.ask', id, question, context });
   };
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    go();
-  });
+
+  const fresh = () => {
+    if (waiting) return;
+    current = { id: `t${Date.now().toString(36)}`, title: '', updatedAt: Date.now(), turns: [] };
+    paintLog(); paintArchive(); ta.focus();
+  };
+  const el = h('div.modal.maintenance-chat.laptop-chat', { role: 'dialog', 'aria-label': 'Office laptop' },
+    h('header', {}, h('div', {}, h('h2', {}, '💻 Ask about the office'), h('span.maintenance-chat-status', {}, `Read-only · ${MAINTENANCE_MODEL}`))),
+    h('div.maintenance-chat-layout', {},
+      h('aside', {}, h('button', { type: 'button', onclick: fresh }, '+ New conversation'), h('h3', {}, 'Conversation archive'), search, archive),
+      h('div.lite-maintenance-workspace', {}, scroller, form)));
+  const modal = openModal(el, { doing: 'asking the office laptop', onClose: () => void (ask = null) });
+
+  form.addEventListener('submit', (e) => { e.preventDefault(); go(); });
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-      e.preventDefault();
-      go();
-    }
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); go(); }
   });
+  search.addEventListener('input', paintArchive);
+  paintLog();
+  paintArchive();
   setTimeout(() => ta.focus(), 30);
   return modal;
 }

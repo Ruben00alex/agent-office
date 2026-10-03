@@ -55,8 +55,9 @@ export function laptopArgs(question: string, model: string): string[] {
  * Answers a question about the office with the small model, through `codex exec` in the office's source
  * (read-only, nothing kept of the session). Resolves with what it said, or why it couldn't.
  */
-export async function askLaptop(question: string, opts: { codex?: string; env?: NodeJS.ProcessEnv } = {}): Promise<{ answer: string } | { error: string }> {
-  const result = await runMaintenanceModel(`${LAPTOP_BRIEF}\n\n${question}`, laptopModel(opts.env), opts);
+export async function askLaptop(question: string, opts: { codex?: string; env?: NodeJS.ProcessEnv; context?: { q: string; a: string }[] } = {}): Promise<{ answer: string } | { error: string }> {
+  const earlier = opts.context?.length ? `The conversation so far:\n\n${opts.context.map((t) => `Q: ${t.q}\nA: ${t.a}`).join('\n\n')}\n\nThe follow-up question:\n\n` : '';
+  const result = await runMaintenanceModel(`${LAPTOP_BRIEF}\n\n${earlier}${question}`, laptopModel(opts.env), opts);
   return 'answer' in result ? { answer: result.answer.slice(0, 20_000) } : result;
 }
 

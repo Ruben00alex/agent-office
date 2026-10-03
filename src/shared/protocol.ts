@@ -1253,7 +1253,8 @@ export type ClientMsg =
   /** A message in the chat with the Product Lead on this floor (a conversation partner, see PRODUCT_DESK); answered with a `product.chat.sent`. */
   | { t: 'product.chat.send'; id: string; prompt: string; newConversation?: boolean; thread?: string; provider?: AgentProvider; model?: string; effort?: AgentEffort }
   /** A question for the maintenance closet's laptop (a small model that knows the office's source); `id` comes back on the `maintenance.answer`. */
-  | { t: 'maintenance.ask'; id: string; question: string }
+  /** `context` is the earlier question/answer turns of the same conversation, so a follow-up makes sense. */
+  | { t: 'maintenance.ask'; id: string; question: string; context?: { q: string; a: string }[] }
   /** The big button in the maintenance closet: commit what's stacked, check it, push, rebuild and restart the office. */
   | { t: 'maintenance.ship' }
   | { t: 'maintenance.check' }

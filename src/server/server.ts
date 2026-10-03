@@ -2234,7 +2234,8 @@ export async function startServer(cfg: Config) {
           break;
         }
         c.asking = true;
-        void askLaptop(question).then((r) => {
+        const context = (Array.isArray(msg.context) ? msg.context : []).slice(-6).map((t) => ({ q: str(t?.q, 2000), a: str(t?.a, 4000) })).filter((t) => t.q && t.a);
+        void askLaptop(question, { context }).then((r) => {
           c.asking = false;
           sendTo(c, { t: 'maintenance.answer', id, model, ...r });
         });

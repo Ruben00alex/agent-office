@@ -168,3 +168,9 @@
 
 .lite-maintenance-console .maintenance-rail-stack { flex: 0 1 auto; min-height: 100px; max-height: 40%; overflow: auto; }
 .lite-maintenance-console .maintenance-rail-commit { flex: none; }
+/* The office laptop (ui/maintenance.ts) reuses the Maintenance chat's window. */
+.modal.laptop-chat .lite-maintenance-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.modal.laptop-chat .maintenance-chat-main { flex: 1 1 0; overflow: auto; }
+.modal.laptop-chat .lp-compose { padding: 8px var(--gutter, 12px) 12px; }
+.modal.laptop-chat .laptop-answer { background: none; border: 0; padding: 0; }
+.modal.laptop-chat .lp-note { margin: 6px 4px; color: #6b7280; font-size: 12px; }

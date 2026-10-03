@@ -89,6 +89,9 @@ test('the laptop gives back what the model printed, or says why it could not', {
   // codex exec waits for the end of stdin before it starts: the laptop must close it.
   const patient = await askLaptop('hi', { codex: fake('patient', 'cat >/dev/null; echo "read all of stdin"') });
   assert.deepEqual(patient, { answer: 'read all of stdin' });
+  // A follow-up carries the earlier turns in its prompt.
+  const echoed = await askLaptop('and then?', { codex: fake('ctx', 'echo "$@"'), context: [{ q: 'what is a floor?', a: 'a project' }] });
+  assert.ok('answer' in echoed && echoed.answer.includes('Q: what is a floor?') && echoed.answer.includes('A: a project') && echoed.answer.includes('and then?'));
   const failed = await askLaptop('hi', { codex: fake('bad', 'echo "unknown model" >&2; exit 1') });
   assert.deepEqual(failed, { error: 'unknown model' });
   const missing = await askLaptop('hi', { codex: path.join(dir, 'nope') });
