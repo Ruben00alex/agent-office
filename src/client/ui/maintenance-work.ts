@@ -130,6 +130,14 @@ export function workPanelParts(state: MaintenanceChatState, send: (message: Clie
         card.append(h('small', {}, `Session: ${activity}`), h('button', { type: 'button', onclick: () => viewConversation(item.workerId!) }, 'Conversation'));
       }
       if (issue.state === 'OPEN') {
+        card.append(h('button', { type: 'button', title: `Close issue #${issue.number} on GitHub`, 'aria-label': `Close issue #${issue.number}`, disabled: item?.status === 'running', onclick: (e: Event) => {
+          const button = e.currentTarget as HTMLButtonElement;
+          button.disabled = true;
+          error.textContent = ''; error.classList.add('hidden');
+          void maintenancePost('/api/maintenance/queue', { number: issue.number, close: true })
+            .then(() => { send({ t: 'maintenance.issues' }); refresh(); })
+            .catch(err => { error.textContent = `Couldn't close #${issue.number}: ${err.message}`; error.classList.remove('hidden'); button.disabled = false; });
+        } }, '✓ Close'));
         const inQueue = maintenanceQueued(issue);
         card.append(h(inQueue ? 'button.is-danger' : 'button.is-primary', { type: 'button', disabled: item?.status === 'running', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, ...(inQueue ? { remove: true } : { attachments: item?.attachments.map(i => i.id) ?? [] }) })) }, inQueue ? 'Remove from queue' : 'Queue for Maintenance'));
         if (inQueue) card.append(h('button.is-primary', { type: 'button', disabled: blocked || !!github.error || github.loading, onclick: () => (!issue.doneBy || confirm(`#${issue.number} looks already done (${issue.doneBy}) but is still open. Start Maintenance on it anyway?`)) && startIssue(issue) }, 'Start issue'));

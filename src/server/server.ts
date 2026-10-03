@@ -1253,6 +1253,7 @@ export async function startServer(cfg: Config) {
             const as = session.account ? signins.ghAs(session.account.id) : undefined;
             if (typeof as === 'string') throw new Error(as);
             await maintenanceBoard.close(number, as);
+            maintenanceWork.remove(repo, number);
           }
           else if (body.remove === true) {
             if (maintenanceWork.get(repo, number)?.status === 'running') throw new Error('Finish or end the active session before removing it.');

@@ -28,6 +28,8 @@ test('maintenance APIs authenticate screenshots, create fork issues and retain q
 const fs = require('node:fs');
 const a = process.argv.slice(2);
 const labelsFile = ${JSON.stringify(path.join(root, 'labels.json'))};
+const closedFile = ${JSON.stringify(path.join(root, 'closed.json'))};
+const state = fs.existsSync(closedFile) ? 'CLOSED' : 'OPEN';
 let labels = fs.existsSync(labelsFile) ? JSON.parse(fs.readFileSync(labelsFile, 'utf8')) : [];
 if (a[0] === 'api' && a.some(arg => arg.startsWith('repos/fork/agent-office/issues/7/labels'))) {
  if (a.includes('POST')) labels = [{name:'maintenance:queued',color:'f08c00'}];
@@ -42,8 +44,11 @@ else if (a[0] === 'issue' && a[1] === 'create') {
 } else if (a[0] === 'issue' && a[1] === 'edit') {
  fs.writeFileSync(${JSON.stringify(path.join(root, 'edited.json'))}, JSON.stringify({ args: a }));
  console.log('https://github.com/fork/agent-office/issues/7');
-} else if (a[0] === 'issue' && a[1] === 'view') console.log(JSON.stringify({ number: 7, title: 'Current GitHub title', state: 'OPEN', body: 'A captured idea', comments: [] }));
-else if(a[0] === 'issue' && a[1] === 'list' && a.includes('open') && fs.existsSync(${JSON.stringify(path.join(root, 'created.json'))})) console.log(JSON.stringify([{number:7,title:'Capture this idea',state:'OPEN',url:'https://github.com/fork/agent-office/issues/7',labels,assignees:[]} ]));
+} else if (a[0] === 'issue' && a[1] === 'close') {
+ if (fs.existsSync(${JSON.stringify(path.join(root, 'fail-close'))})) { console.error('Close denied'); process.exit(1); }
+ fs.writeFileSync(closedFile, JSON.stringify(a)); console.log('Closed');
+} else if (a[0] === 'issue' && a[1] === 'view') console.log(JSON.stringify({ number: 7, title: 'Current GitHub title', state, body: 'A captured idea', comments: [] }));
+else if(a[0] === 'issue' && a[1] === 'list' && a.includes(state === 'OPEN' ? 'open' : 'closed') && fs.existsSync(${JSON.stringify(path.join(root, 'created.json'))})) console.log(JSON.stringify([{number:7,title:'Capture this idea',state,url:'https://github.com/fork/agent-office/issues/7',labels,assignees:[]} ]));
 else console.log('[]');
 `); chmodSync(cli, 0o755);
   const codex = path.join(root, 'codex');
@@ -173,6 +178,10 @@ console.log(JSON.stringify({title:'Improve captured idea',body:'## Scope\\nGroun
   const running = await (await fetch(`${base}/api/maintenance/chat`, { headers: { cookie } })).json();
   assert.equal(running.work[0].status, 'running'); assert.equal(running.work[0].workerId, receipt.workerId);
   assert.deepEqual(running.conversation.messages[0].attachments, [image]);
+  const activeClose = await fetch(`${base}/api/maintenance/queue`, { method: 'POST', headers, body: JSON.stringify({ number: 7, close: true }) });
+  assert.equal(activeClose.status, 400);
+  assert.match((await activeClose.json()).error, /Finish or end/);
+  assert.equal(existsSync(path.join(root, 'closed.json')), false);
   live!.status = 'done';
   const review = await (await fetch(`${base}/api/maintenance/chat`, { headers: { cookie } })).json();
   assert.equal(review.work[0].status, 'review');
@@ -198,6 +207,20 @@ console.log(JSON.stringify({title:'Improve captured idea',body:'## Scope\\nGroun
   assert.equal(toolQueued.work[0].status, 'queued');
   assert.deepEqual(toolQueued.work[0].attachments, [image], 'Requeue through the agent preserves evidence');
   assert.equal((await tool({ action: 'remove', number: 7 })).status, 200);
+  assert.equal((await tool({ action: 'queue', number: 7 })).status, 200);
+  writeFileSync(path.join(root, 'fail-close'), '');
+  const failedClose = await fetch(`${base}/api/maintenance/queue`, { method: 'POST', headers, body: JSON.stringify({ number: 7, close: true }) });
+  assert.equal(failedClose.status, 400);
+  assert.equal((await (await fetch(`${base}/api/maintenance/chat`, { headers: { cookie } })).json()).work.length, 1, 'Failed GitHub close retains tracking');
+  rmSync(path.join(root, 'fail-close'));
+  const closed = await fetch(`${base}/api/maintenance/queue`, { method: 'POST', headers, body: JSON.stringify({ number: 7, close: true }) });
+  assert.equal(closed.status, 200, JSON.stringify(await closed.clone().json()));
+  const closeArgs = JSON.parse(readFileSync(path.join(root, 'closed.json'), 'utf8'));
+  assert.deepEqual(closeArgs.slice(0, 3), ['issue', 'close', '7']);
+  assert.ok(closeArgs.includes('fork/agent-office'));
+  assert.ok(closeArgs.includes('--reason=completed'));
+  assert.equal((await (await fetch(`${base}/api/maintenance/chat`, { headers: { cookie } })).json()).work.length, 0, 'Closing removes tracked work');
+  assert.deepEqual(JSON.parse(readFileSync(path.join(cfg.dataDir, 'maintenance-work.json'), 'utf8')), [], 'Removal is persisted');
   ws.close();
   const removed = await fetch(`${base}/api/maintenance/queue`, { method: 'POST', headers, body: JSON.stringify({ number: 7, remove: true }) });
   assert.equal(removed.status, 200);
