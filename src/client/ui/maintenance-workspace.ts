@@ -194,6 +194,19 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
     }
     if (!input.value) input.value = typeof draft === 'string' ? draft : draft?.text ?? '';
     if (draft && typeof draft !== 'string') images?.set(Array.isArray(draft.attachments) ? draft.attachments.filter(i => i && /^[a-f0-9-]{36}$/.test(i.id)) : []);
+    if (!maintenance && !draft) {
+      try {
+        const old = JSON.parse(localStorage.getItem('agent-office.product-draft-v1') ?? '{}');
+        const migrated = old[s];
+        if (typeof migrated === 'string') {
+          drafts[s] = migrated;
+          if (!input.value) input.value = migrated;
+          localStorage.setItem(draftKey, JSON.stringify(drafts));
+          delete old[s];
+          localStorage.setItem('agent-office.product-draft-v1', JSON.stringify(old));
+        }
+      } catch { /* Storage unavailable. */ }
+    }
     tray();
     grow();
   };
@@ -289,7 +302,7 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
         button('Review stack →', () => { view = maintenanceView = 'review'; reviewKey = ''; paintFrame(); paintView(); }),
       );
     }
-    const waiting = w?.status === 'needs_input' && (maintenance || state?.terminalInputRequired !== false);
+    const waiting = w?.status === 'needs_input' && state?.terminalInputRequired !== false;
     attention.classList.toggle('hidden', !waiting);
     fill(attention, waiting ? h('b', {}, 'Your attention is needed') : null, waiting ? h('p', {}, w.activity ?? 'Answer the prompt in the live console.') : null);
     model.repaint();
@@ -481,7 +494,7 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
     pick,
     title: cfg.kind === 'product' ? '🧭 Product Lead' : '🛠️ Maintenance',
     el,
-    actions: [iconButton('🕘', 'Conversations', openHistory), ...(maintenance ? [generateTitleButton('/api/maintenance/chat-title', () => state?.conversation?.id, () => void refresh(), showError)] : [])],
+    actions: [iconButton('🕘', 'Conversations', openHistory), generateTitleButton(`${cfg.endpoint}-title`, () => state?.conversation?.id, () => void refresh(), showError)],
     menu: () => [
       { icon: '➕', label: 'New conversation', run: () => pick(undefined, true) },
       { icon: '🖥️', label: 'Open its terminal', sub: 'Answer a permission prompt, watch it work', hidden: !(state?.worker && state.floor), run: () => state?.worker && state.floor && host.terminal(state.worker, state.floor) },

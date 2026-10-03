@@ -122,7 +122,7 @@ export interface MaintenanceChatState {
   floor?: string;
   floorName?: string;
   richReplies: boolean;
-  /** Product Lead has a confirmed setup, permission or interactive question in its terminal. */
+  /** The chat agent has a confirmed setup, permission or interactive question in its terminal. */
   terminalInputRequired?: boolean;
   work?: MaintenanceWorkItem[];
   stack?: MaintenanceStack;

@@ -18,8 +18,8 @@ try {
     await page.locator('[data-message="m59"]').waitFor();
     const dimensions = await page.evaluate(()=>{
       const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,height:r.height};};
-      const list=document.querySelector('.maintenance-chat-messages');
-      return {modal:box('.product-chat'),list:box('.maintenance-chat-messages'),composer:box('.maintenance-chat-composer'),send:box('.maintenance-send'),scrollHeight:list.scrollHeight,clientHeight:list.clientHeight};
+      const list=document.querySelector('.lp-chatscroll');
+      return {modal:box('.product-chat'),list:box('.lp-chatscroll'),composer:box('.lp-bottom'),send:box('.lp-send'),scrollHeight:list.scrollHeight,clientHeight:list.clientHeight};
     });
     console.log(`Passed Product Lead scrolling and visible controls at ${width}×${height}`);
     await page.screenshot({path:`/tmp/product-chat-layout-${width}-${height}.png`});
@@ -28,10 +28,10 @@ try {
     assert.ok(dimensions.send.bottom<=height && dimensions.send.left>=0 && dimensions.send.right<=width,'Send is in viewport');
     assert.ok(dimensions.list.top>=dimensions.modal.top && dimensions.list.bottom<=dimensions.composer.top, 'messages fit above composer');
     assert.ok(dimensions.clientHeight>40 && dimensions.scrollHeight>dimensions.clientHeight,'messages have a bounded scroll area');
-    await page.locator('.maintenance-chat-messages').evaluate(el=>el.scrollTop=0);
-    await page.locator('.maintenance-chat-messages').hover();
+    await page.locator('.lp-chatscroll').evaluate(el=>el.scrollTop=0);
+    await page.locator('.lp-chatscroll').hover();
     await page.mouse.wheel(0,500);
-    await page.waitForFunction(()=>document.querySelector('.maintenance-chat-messages').scrollTop>0);
+    await page.waitForFunction(()=>document.querySelector('.lp-chatscroll').scrollTop>0);
     await page.close();
   }
 } finally {await browser.close();}

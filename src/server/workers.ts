@@ -624,7 +624,7 @@ export class WorkerManager {
       return typeof info === 'string' ? info : { info, hired: true };
     }
     // Typed into the question it's asking, the prompt would answer it.
-    if (w.info.status === 'needs_input' && (deskId !== PRODUCT_DESK || this.productNeedsTerminal(w.info.id))) return `The ${w.info.name} is waiting on an answer in its terminal`;
+    if (w.info.status === 'needs_input' && (!isChatDesk(deskId) || this.chatNeedsTerminal(w.info.id))) return `The ${w.info.name} is waiting on an answer in its terminal`;
     const running = !!(w.pty || w.dsh);
     if (!running) w.info.lastInput = { by, at: Date.now() };
     const err = running ? this.prompt(w.info.id, clean, by) : this.resume(w.info.id, clean);
@@ -634,7 +634,7 @@ export class WorkerManager {
   }
 
   /** A stale Codex needs_input badge is not evidence of an open terminal prompt. */
-  productNeedsTerminal(id: string): boolean {
+  chatNeedsTerminal(id: string): boolean {
     const w = this.workers.get(id);
     if (!w || w.info.status !== 'needs_input') return false;
     if (w.info.provider !== 'codex') return true;
@@ -2152,7 +2152,7 @@ export class WorkerManager {
     // The public final reply proves this Codex turn ended even if its Stop hook was lost.
     // Never let an older reply clear a prompt from a newer turn.
     const last = messages.at(-1);
-    if (w.info.deskId === PRODUCT_DESK && provider === 'codex' && last?.role === 'assistant'
+    if (isChatDesk(w.info.deskId) && provider === 'codex' && last?.role === 'assistant'
       && last.phase === 'final_answer' && last.at >= (w.info.lastInput?.at ?? w.info.createdAt)
       && last.at >= (w.permissionReview?.since ?? 0) && ['working', 'needs_input'].includes(w.info.status)) {
       w.bootBlocked = false;

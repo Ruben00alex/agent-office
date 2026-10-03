@@ -1283,7 +1283,7 @@ export async function startServer(cfg: Config) {
           conversations: productHistory.list(floor.def.id),
           conversation: id ? productHistory.page(id, url.searchParams.get('before') ?? undefined) : undefined,
           worker: agent, floor: floor.def.id, floorName: floor.def.name,
-          terminalInputRequired: !!agent && floor.workers.productNeedsTerminal(agent.id),
+          terminalInputRequired: !!agent && floor.workers.chatNeedsTerminal(agent.id),
           richReplies: !agent || ['codex', 'claude', 'custom'].includes(agent.provider ?? ''),
         });
       }
@@ -1301,6 +1301,7 @@ export async function startServer(cfg: Config) {
               work: maintenanceWork.list(maintenanceBoard.state.repo), stack: stack.state,
               conversations: maintenanceHistory.list(),
               conversation: id ? maintenanceHistory.page(id, url.searchParams.get('before') ?? undefined) : undefined,
+              terminalInputRequired: !!agent && agent.floor.workers.chatNeedsTerminal(agent.info.id),
               worker: agent?.info, floor: agent?.floor.def.id, floorName: agent?.floor.def.name,
               richReplies: !agent || ['codex', 'claude', 'custom'].includes(agent.info.provider ?? ''),
             });

@@ -29,7 +29,7 @@ try {
   const send = page.getByRole('button',{name:'Send',exact:true});
   await page.waitForFunction(() => Array.from(document.querySelectorAll('button')).some(b=>(b.textContent==='Send'||b.getAttribute('aria-label')==='Send')&&!b.disabled));
   assert.deepEqual(await page.evaluate(()=>window.sent.find(m=>m.t==='worker.kill')), {t:'worker.kill', workerId:'product'});
-  await page.getByRole('textbox',{name:lite?'Message to Product Lead':'Message to the Product Lead'}).fill('Fresh context');
+  await page.getByRole('textbox',{name:'Message to Product Lead'}).fill('Fresh context');
   await send.click();
   assert.equal(await page.evaluate(()=>window.sent.find(m=>m.t==='product.chat.send')?.newConversation),true);
   await page.screenshot({path:`/tmp/product-session-${lite?'lite':'3d'}.png`});
