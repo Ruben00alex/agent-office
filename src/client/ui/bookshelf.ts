@@ -1,4 +1,4 @@
-import { isDocPath, resolveDocLink, type DocFile, type DocList, type DocText } from '../../shared/docs';
+import { DOC_GROUPS, docGroup, isDocPath, resolveDocLink, type DocFile, type DocList, type DocText } from '../../shared/docs';
 import { clip, h, openModal, setDoing, timeAgo, toast } from './dom';
 import { markdownFile } from './markdown';
 
@@ -74,6 +74,8 @@ export function filterDocs(files: DocFile[], query: string): Hit[] {
       if (inName) options.push([rate(inName, name) + 20, () => inName.forEach((i) => hit.path.add(dir + i))]);
       if (inTitle) options.push([rate(inTitle, doc.title!) + 10, () => inTitle.forEach((i) => hit.title.add(i))]);
       if (inPath) options.push([rate(inPath, doc.path), () => inPath.forEach((i) => hit.path.add(i))]);
+      // Failing those, a word the doc's opening paragraph says.
+      if (!options.length && doc.summary?.toLowerCase().includes(w)) options.push([1, () => {}]);
       if (!options.length) {
         all = false;
         break;
@@ -82,14 +84,16 @@ export function filterDocs(files: DocFile[], query: string): Hit[] {
       hit.score += best[0];
       best[1]();
     }
-    if (all) hits.push(hit);
+    // The project's own docs edge ahead of dev notes with the same match.
+    if (all) hits.push({ ...hit, score: hit.score + (docGroup(doc.path) === 'dev' ? 0 : 3) });
   }
   return hits.sort((a, b) => b.score - a.score || a.doc.path.length - b.doc.path.length || a.doc.path.localeCompare(b.doc.path));
 }
 
-/** The project's own docs first (its README before the rest), then each folder's, in path order. */
+/** The project's own docs first (its README before the rest), then the docs folder, then each folder's notes, in path order. */
 export function shelfOrder(files: DocFile[]): DocFile[] {
-  const rank = (p: string) => (p.includes('/') ? 2 : /^readme\./i.test(p) ? 0 : 1);
+  const order = DOC_GROUPS.map((g) => g.id);
+  const rank = (p: string) => order.indexOf(docGroup(p)) * 2 + (/^readme\./i.test(p) && !p.includes('/') ? 0 : 1);
   return [...files].sort((a, b) => rank(a.path) - rank(b.path) || a.path.localeCompare(b.path));
 }
 
@@ -154,6 +158,8 @@ export function openBookshelf(deps: ShelfDeps) {
 
   const filter = h('input', { type: 'text', placeholder: 'Filter the docs…', 'aria-label': 'Filter the docs', spellcheck: 'false', autocomplete: 'off' }) as HTMLInputElement;
   const count = h('div.bs-count', {}, 'Looking along the shelves…');
+  const note = h('div.bs-note');
+  note.hidden = true;
   const list = h('ul.bs-list', { role: 'listbox', 'aria-label': 'Docs' });
   const crumbs = h('div.bs-crumbs');
   const meta = h('div.bs-meta');
@@ -179,7 +185,7 @@ export function openBookshelf(deps: ShelfDeps) {
     h(
       'div.body',
       {},
-      h('aside.bs-side', {}, h('div.bs-find', {}, filter), count, list),
+      h('aside.bs-side', {}, h('div.bs-find', {}, filter), count, note, list),
       h('article.bs-reader', {}, h('div.bs-bar', {}, crumbs, meta, toc), page),
     ),
   );
@@ -187,6 +193,8 @@ export function openBookshelf(deps: ShelfDeps) {
   page.append(h('div.bs-empty', {}, h('span.spinner')));
 
   let files: DocFile[] = [];
+  let excluded: string[] = [];
+  let hidden = 0;
   let shown: Hit[] = [];
   /** Which of `shown` ↑ ↓ are on. */
   let sel = 0;
@@ -200,26 +208,38 @@ export function openBookshelf(deps: ShelfDeps) {
 
   const renderList = () => {
     count.textContent = !files.length ? '' : filter.value.trim() ? `${shown.length} of ${files.length} docs` : `${files.length} doc${files.length === 1 ? '' : 's'}`;
+    const grouped = !filter.value.trim();
+    let lastGroup = '';
     list.replaceChildren(
-      ...shown.map((hit, i) => {
+      ...shown.flatMap((hit, i) => {
         const { doc } = hit;
         const title = doc.title ?? nameOf(doc.path);
+        const group = docGroup(doc.path);
+        const heading = grouped && group !== lastGroup ? h('li.bs-group', { role: 'presentation' }, DOC_GROUPS.find((g) => g.id === group)!.label) : null;
+        lastGroup = group;
         const li = h(
           'li.bs-item',
           { role: 'option', 'aria-selected': String(i === sel), class: `${i === sel ? 'sel' : ''} ${doc.path === current ? 'open' : ''}`, title: doc.path },
           h('div.bs-title', {}, ...(doc.title ? marked(title, hit.title) : marked(title, new Set([...hit.path].map((p) => p - (doc.path.length - title.length)))))),
           h('div.bs-path', {}, ...marked(doc.path, hit.path)),
+          ...(!grouped && group !== 'project' ? [h('span.bs-tag', {}, DOC_GROUPS.find((g) => g.id === group)!.label)] : []),
         );
         li.addEventListener('mousedown', (e) => e.preventDefault());
         li.addEventListener('click', () => {
           sel = i;
           void openDoc(doc.path);
         });
-        return li;
+        return heading ? [heading, li] : [li];
       }),
     );
     if (!files.length) list.append(h('li.bs-none', {}, 'No Markdown files in this project yet.'));
     else if (!shown.length) list.append(h('li.bs-none', {}, 'No doc matches that.'));
+  };
+
+  const paintNote = () => {
+    note.hidden = !files.length && !hidden;
+    note.textContent = `Searching the project's Markdown docs by name, title and opening line.${hidden ? ` ${hidden} hidden (${excluded.join(', ')}).` : ''}`;
+    note.title = `Change what's hidden with agent-office.docs.json in the project folder: {"exclude": [...], "include": [...]}`;
   };
 
   const refilter = () => {
@@ -359,6 +379,9 @@ export function openBookshelf(deps: ShelfDeps) {
     .then((r) => {
       if (!el.isConnected) return;
       files = r.files;
+      excluded = r.excluded ?? [];
+      hidden = r.hidden ?? 0;
+      paintNote();
       refilter();
       if (r.more) count.textContent += ` (the first ${files.length})`;
       const start = [lastRead(floor), ...shelfOrder(files).map((f) => f.path)].find((p) => p && files.some((f) => f.path === p));

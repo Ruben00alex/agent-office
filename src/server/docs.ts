@@ -4,7 +4,7 @@ import path from 'node:path';
 import { insideCheckout } from './changes.js';
 import type { ImageResult } from './decor.js';
 import { changedImageType } from '../shared/protocol.js';
-import { isDocPath, type DocFile, type DocList, type DocText } from '../shared/docs.js';
+import { DEFAULT_DOC_EXCLUDES, docExcluded, docSummary, isDocPath, type DocConfig, type DocFile, type DocList, type DocText } from '../shared/docs.js';
 
 // The bookshelf: every Markdown file in a floor's project, to read in the office (ui/bookshelf.ts).
 // Git says which files are the project's (tracked, or new and not ignored), so node_modules, build
@@ -22,6 +22,19 @@ const FRESH_MS = 3000;
 /** Folders the walk (without git) doesn't go into, besides hidden ones. */
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'target', 'vendor', 'coverage', '__pycache__', 'venv']);
 const MAX_DEPTH = 12;
+/** A project's say on what's a doc (see DocConfig). */
+const CONFIG_FILE = 'agent-office.docs.json';
+
+/** The project's doc config, or the defaults when it has none or it isn't valid. */
+async function readConfig(dir: string): Promise<DocConfig> {
+  try {
+    const raw = JSON.parse(await readFile(path.join(dir, CONFIG_FILE), 'utf8'));
+    const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 100) : undefined);
+    return { exclude: list(raw?.exclude), include: list(raw?.include) };
+  } catch {
+    return {};
+  }
+}
 
 type Failure = { status: number; error: string };
 
@@ -113,7 +126,7 @@ export class Docs {
   private last: { at: number; list: DocList } | null = null;
   private listing: Promise<DocList> | null = null;
   /** Titles by path, kept while the file's size and time stay the same. */
-  private titles = new Map<string, { sig: string; title?: string }>();
+  private titles = new Map<string, { sig: string; title?: string; summary?: string }>();
 
   constructor(private dir: string) {}
 
@@ -125,11 +138,14 @@ export class Docs {
   }
 
   private async scan(): Promise<DocList> {
-    const found = ((await gitDocs(this.dir)) ?? (await walkDocs(this.dir))).filter(isDocPath).map((p) => p.split(path.sep).join('/'));
+    const config = await readConfig(this.dir);
+    const all = ((await gitDocs(this.dir)) ?? (await walkDocs(this.dir))).filter(isDocPath).map((p) => p.split(path.sep).join('/'));
+    const found = all.filter((p) => !docExcluded(p, config));
+    const hidden = all.length - found.length;
     found.sort((a, b) => a.localeCompare(b));
     const more = found.length > MAX_DOCS;
     const files: DocFile[] = [];
-    const titles = new Map<string, { sig: string; title?: string }>();
+    const titles = new Map<string, { sig: string; title?: string; summary?: string }>();
     // A few at a time: a big project has thousands.
     const paths = found.slice(0, MAX_DOCS);
     for (let i = 0; i < paths.length; i += 32) {
@@ -142,9 +158,12 @@ export class Docs {
             if (!s.isFile()) return undefined;
             const sig = `${s.size}:${Math.round(s.mtimeMs)}`;
             let known = this.titles.get(p);
-            if (known?.sig !== sig) known = { sig, title: docTitle(await head(abs)) };
+            if (known?.sig !== sig) {
+              const top = await head(abs);
+              known = { sig, title: docTitle(top), summary: docSummary(top) };
+            }
             titles.set(p, known);
-            return { path: p, title: known.title, size: s.size, mtime: Math.round(s.mtimeMs) };
+            return { path: p, title: known.title, summary: known.summary, size: s.size, mtime: Math.round(s.mtimeMs) };
           } catch {
             return undefined;
           }
@@ -153,7 +172,7 @@ export class Docs {
       for (const f of batch) if (f) files.push(f);
     }
     this.titles = titles;
-    const list = { files, more };
+    const list = { files, more, excluded: config.exclude ?? DEFAULT_DOC_EXCLUDES, hidden };
     this.last = { at: Date.now(), list };
     return list;
   }

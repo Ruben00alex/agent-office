@@ -96,3 +96,34 @@ test('links in a doc resolve to paths in the project, and nowhere else', () => {
   assert.ok(isDocPath('a/b.MD') && isDocPath('x.markdown'));
   assert.ok(!isDocPath('a.mdx') && !isDocPath('../a.md') && !isDocPath('a/./b.md') && !isDocPath('md'));
 });
+
+test('doc exclusions: defaults, config patterns and includes', async () => {
+  const { docExcluded, docGroup, docSummary } = await import('../src/shared/docs.js');
+  assert.equal(docExcluded('platform/openclaw/README.md'), true);
+  assert.equal(docExcluded('packages/vendor/x.md'), true);
+  assert.equal(docExcluded('docs/setup.md'), false);
+  assert.equal(docExcluded('src/platform-notes.md'), false);
+  assert.equal(docExcluded('docs/internal/a.md', { exclude: ['docs/internal/**'] }), true);
+  assert.equal(docExcluded('platform/a.md', { exclude: ['docs/internal/**'] }), false);
+  assert.equal(docExcluded('a/CHANGELOG.md', { exclude: ['**/CHANGELOG.md'] }), true);
+  assert.equal(docExcluded('platform/keep.md', { include: ['platform/keep.md'] }), false);
+  assert.equal(docGroup('README.md'), 'project');
+  assert.equal(docGroup('docs/a.md'), 'docs');
+  assert.equal(docGroup('src/server/NOTES.md'), 'dev');
+  assert.equal(docSummary('# T\n\n[![b](x)](y)\n\nFirst **line** of\nprose.\n\nSecond.'), 'First line of prose.');
+});
+
+test('the shelf hides excluded folders and reports it', async (t) => {
+  const { dir, docs } = fixture(t, false);
+  mkdirSync(path.join(dir, 'platform'), { recursive: true });
+  writeFileSync(path.join(dir, 'platform/README.md'), '# backend\n');
+  const list = await docs.list();
+  assert.ok(!list.files.some((f) => f.path.startsWith('platform/')));
+  assert.equal(list.hidden, 1);
+  assert.ok(list.excluded.includes('platform/'));
+  assert.equal(list.files.find((f) => f.path === 'README.md')?.summary, 'Hello.');
+  writeFileSync(path.join(dir, 'agent-office.docs.json'), '{"exclude":["docs/"]}');
+  const other = await new Docs(dir).list();
+  assert.ok(other.files.some((f) => f.path.startsWith('platform/')));
+  assert.ok(!other.files.some((f) => f.path.startsWith('docs/')));
+});
