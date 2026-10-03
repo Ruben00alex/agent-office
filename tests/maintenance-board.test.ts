@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { MaintenanceBoard } from '../src/server/maintenance-board.js';
+import { MaintenanceBoard, type MaintenanceWorkRecord } from '../src/server/maintenance-board.js';
 
 test('maintenance issues and detail use the office source even when the project has the same issue number', async (t) => {
   const root = mkdtempSync(path.join(tmpdir(), 'ao-maintenance-board-'));
@@ -27,6 +27,7 @@ const office = process.cwd().endsWith('/agent-office') && selected === 'team/age
 if (['repo', 'issue', 'pr'].includes(args[0]) && !office) { console.error('Wrong repository: upstream issue #42 does not exist'); process.exit(1); }
 const title = office ? (require('node:fs').existsSync(process.cwd() + '/title.txt') ? require('node:fs').readFileSync(process.cwd() + '/title.txt', 'utf8') : 'Fix the maintenance closet') : 'Unrelated project issue';
 if (args[0] === 'repo') console.log(JSON.stringify({nameWithOwner: office ? 'team/agent-office' : 'team/project'}));
+else if (args[0] === 'issue' && args[1] === 'close') require('node:fs').writeFileSync(process.cwd() + '/closed.json', JSON.stringify(args));
 else if (args[0] === 'issue' && args[1] === 'create') { require('node:fs').writeFileSync(process.cwd() + '/created.json', JSON.stringify({args, marker:process.env.CREATE_AS})); console.log('https://github.com/team/agent-office/issues/43'); }
 else if (args[0] === 'issue' && args[1] === 'view') console.log(JSON.stringify({number:42,state:'OPEN',body:title,comments:[]}));
 else if (args[0] === 'issue' && args.includes('open')) console.log(JSON.stringify([{number:42,title,state:'OPEN',url:'https://github.com/team/agent-office/issues/42'}]));
@@ -36,15 +37,25 @@ else console.log('[]');
   const previous = process.env.PATH;
   process.env.PATH = `${root}${path.delimiter}${previous}`;
   t.after(() => { process.env.PATH = previous; });
-  let workCommits: { number: number; sha: string }[] = [];
+  let workCommits: MaintenanceWorkRecord[] = [];
   const board = new MaintenanceBoard(() => {}, source, () => workCommits);
   await board.refresh();
   assert.equal(board.state.repo, 'team/agent-office');
   assert.equal(board.state.items[0].title, 'Fix the maintenance closet');
   assert.equal(board.state.items[0].doneBy, undefined, 'inherited closing keywords must not complete the fork issue');
-  workCommits = [{ number: 42, sha: shippedSha }];
+  workCommits = [{ number: 42, status: 'paused', commits: [{ sha: shippedSha }] }];
   await board.refresh();
   assert.equal(board.state.items[0].doneBy, `commit ${shippedSha.slice(0, 7)} on main`, 'recorded Maintenance work still identifies shipped commits');
+  assert.deepEqual(board.state.items[0].work, { status: 'paused', commits: 1 }, 'cards carry Maintenance status for every view');
+  assert.equal(existsSync(path.join(source, 'closed.json')), false, 'interrupted work is never closed automatically');
+  workCommits = [{ number: 42, status: 'review', commits: [{ sha: shippedSha }] }];
+  await board.refresh();
+  const closed = JSON.parse(readFileSync(path.join(source, 'closed.json'), 'utf8'));
+  assert.ok(closed.includes('42') && closed.includes('team/agent-office'), 'finished work whose commits all shipped closes its issue');
+  assert.ok(closed.some((a: string) => a.includes(shippedSha.slice(0, 7))), 'the closing comment names the shipped commits');
+  rmSync(path.join(source, 'closed.json'));
+  await board.refresh();
+  assert.equal(existsSync(path.join(source, 'closed.json')), false, 'a close is attempted once, not every poll');
   workCommits = [];
   await board.refresh();
   assert.equal(board.state.items[0].doneBy, undefined, 'stale completion badges are cleared');

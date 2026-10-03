@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-export interface IssueJobInput { title: string; body: string; queue: boolean; writer: string; attachments: string[]; number?: number; instructions?: string }
+export type IssueDraft = { title: string; body: string; labels?: string[]; reply?: string };
+/** `messages` makes it a crafting turn: the conversation so far, with `title`, `body` and `labels` the draft as it stands. */
+export interface IssueJobInput { title: string; body: string; queue: boolean; writer: string; attachments: string[]; number?: number; instructions?: string; messages?: { role: 'user' | 'assistant'; content: string }[]; labels?: string[] }
 export interface IssueJob extends IssueJobInput {
   id: string;
   by: string;
@@ -8,14 +10,14 @@ export interface IssueJob extends IssueJobInput {
   startedAt: number;
   finishedAt?: number;
   error?: string;
-  draft?: { title: string; body: string };
+  draft?: IssueDraft;
   issue?: { number: number; url: string; title: string };
 }
 
 /** Drafting runs here on the server, so it outlives the form and the browser connection that started it. A failed job keeps its input for retry. */
 export class IssueJobs {
   private readonly jobs = new Map<string, IssueJob>();
-  constructor(private readonly run: (job: IssueJob) => Promise<{ title: string; body: string }>, private readonly save: (job: IssueJob, draft: { title: string; body: string }) => Promise<{ number: number; url: string; title: string }>, private readonly keep = 20) {}
+  constructor(private readonly run: (job: IssueJob) => Promise<IssueDraft>, private readonly save: (job: IssueJob, draft: IssueDraft) => Promise<{ number: number; url: string; title: string }>, private readonly keep = 20) {}
 
   list(): IssueJob[] { return [...this.jobs.values()].sort((a, b) => b.startedAt - a.startedAt); }
 
@@ -36,11 +38,11 @@ export class IssueJobs {
     return job;
   }
 
-  async confirm(id: string, title: string, body: string): Promise<IssueJob> {
+  async confirm(id: string, title: string, body: string, labels?: string[]): Promise<IssueJob> {
     const job = this.jobs.get(id);
     if (!job || !job.draft || !['ready', 'failed'].includes(job.status)) throw new Error('This draft is not ready to save');
     if (!title.trim() || title.length > 200 || body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
-    job.draft = { title: title.trim(), body };
+    job.draft = { ...job.draft, title: title.trim(), body, ...(labels ? { labels } : {}) };
     job.status = 'saving'; job.error = undefined;
     try { job.issue = await this.save(job, job.draft); job.status = 'done'; }
     catch (err) { job.error = (err as Error).message; job.status = 'failed'; throw err; }

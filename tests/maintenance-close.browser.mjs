@@ -42,7 +42,7 @@ try {
   assert.deepEqual(posts, [{ number: 1, close: true }, { number: 1, close: true }]);
   assert.deepEqual(await page.evaluate(() => sent), [{ t: 'maintenance.issues' }]);
   assert.equal(await close.count(), 0);
-  const historical = page.locator('article').filter({ hasText: '#1 · Issue 1' });
+  const historical = page.locator('details.lane-closed article').filter({ hasText: 'Issue 1' });
   assert.equal(await historical.count(), 1, 'Closed GitHub history remains');
   assert.equal(await historical.getByText('Session:', { exact: false }).count(), 0, 'Local work no longer renders');
   assert.deepEqual(errors, []);

@@ -64,6 +64,8 @@ test('issue queue is durable, serial, fork scoped, and links only commits added 
   assert.equal(restored.get('fork/office', 1)?.status, 'running');
   assert.equal(restored.get('fork/office', 1)?.commits.length, 2);
   restored.reconcile(worker('done'), []);
+  restored.reconcile(worker('exited'), []);
+  assert.equal(restored.get('fork/office', 1)?.status, 'review', 'Ending a finished session leaves it waiting for review');
   restored.reviewed('fork/office', 1);
   assert.equal(new MaintenanceWork(dir).get('fork/office', 1)?.status, 'done');
   restored.start('fork/office', 2, worker(), ['abc', 'def']);

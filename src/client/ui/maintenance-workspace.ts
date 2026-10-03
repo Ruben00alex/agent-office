@@ -11,6 +11,7 @@ import { maintenanceContent } from './maintenance-content';
 import { generateTitleButton, maintenanceJson } from './maintenance-board';
 import { imageComposer, imageEvidence } from './maintenance-images';
 import { openMaintenanceIssueCreate, workPanelParts } from './maintenance-work';
+import { issueCrafting, onIssueJobs } from './maintenance-issue-crafter';
 import { actions, button, fill, iconButton, layout, note, openSheet, row, searchBox } from '../lite/kit';
 import './maintenance-workspace.css';
 
@@ -481,7 +482,9 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
 
   const offs = [on('workers', () => void refresh())];
   if (maintenance) {
-    offs.push(on('maintenanceIssues', () => ((reviewKey = ''), paintView())), on('maintenance', () => ((reviewKey = ''), state && (state.stack = store.maintenance), controls())));
+    let crafting = issueCrafting();
+    // Repaint only when drafting starts or stops (the + Add issue orb), not on every poll.
+    offs.push(onIssueJobs(() => { if (crafting !== issueCrafting()) { crafting = !crafting; paintView(); } }), on('maintenanceIssues', () => ((reviewKey = ''), paintView())), on('maintenance', () => ((reviewKey = ''), state && (state.stack = store.maintenance), controls())));
     net.send({ t: 'maintenance.issues' });
     net.send({ t: 'maintenance.stack' });
   }

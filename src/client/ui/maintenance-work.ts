@@ -1,97 +1,28 @@
-import type { MaintenanceAttachment, ClientMsg, MaintenanceChatState, MaintenanceWorkItem } from '../../shared/protocol';
+import type { ClientMsg, GhIssue, GhLabel, MaintenanceChatState, MaintenanceWorkItem } from '../../shared/protocol';
 import { store } from '../state';
-import { h, openModal, toast } from './dom';
+import { h, timeAgo } from './dom';
 import { openMaintenanceIssue } from './maintenance-board';
-import { maintenanceIssueColumns, maintenanceQueued } from '../../shared/maintenance-issues';
-import { imageComposer, imageEvidence } from './maintenance-images';
-import { openIssueEditor } from './maintenance-issue-editor';
+import { maintenanceIssueColumns, MAINTENANCE_QUEUE_LABEL, type MaintenanceLane } from '../../shared/maintenance-issues';
+import { imageEvidence } from './maintenance-images';
+import { hasIssueDraft, issueCrafting, maintenancePost, openIssueCrafter, watchIssueJobs } from './maintenance-issue-crafter';
 import { openStackChange } from './maintenance';
 
-export async function maintenancePost<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
-  return data;
+export { maintenancePost } from './maintenance-issue-crafter';
+
+/** + Add issue everywhere opens the crafter, carrying on any conversation this browser has going. */
+export function openMaintenanceIssueCreate(saved: () => void) { return openIssueCrafter({ saved }); }
+
+/** A GitHub label as a chip in its own color, with readable text on it. */
+export function labelChip(label: GhLabel) {
+  const hex = (label.color ?? '').replace('#', '').padEnd(6, '0').slice(0, 6);
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) || 0);
+  return h('span.issue-tag', { style: `background:#${hex};color:${r * 0.299 + g * 0.587 + b * 0.114 > 150 ? '#2b2d42' : '#fff'}` }, label.name);
 }
 
-export interface IssueJobView { id: string; title: string; body: string; queue: boolean; writer: string; attachments: string[]; number?: number; draft?: { title: string; body: string }; status: 'drafting' | 'ready' | 'saving' | 'done' | 'failed'; error?: string; issue?: { number: number; url: string; title: string } }
-const jobStatus = new Map<string, IssueJobView['status']>();
-const jobListeners = new Set<(jobs: IssueJobView[]) => void>();
-let jobPoll: number | undefined;
-let jobsDone: () => void = () => {};
-
-/** Drafting runs on the server; this just watches it, so closing the form (or reloading) never interrupts a draft. */
-async function pollIssueJobs() {
-  try {
-    const { jobs } = await (await fetch('/api/maintenance/issue-jobs', { credentials: 'same-origin' })).json() as { jobs: IssueJobView[] };
-    for (const job of jobs) {
-      const before = jobStatus.get(job.id);
-      jobStatus.set(job.id, job.status);
-      if (before !== 'drafting' || job.status === 'drafting') continue;
-      if (job.status === 'ready') toast(`Draft “${job.title}” is ready to review. Open + Add issue to review and save it.`);
-      else if (job.status === 'done') { toast(`Issue #${job.issue?.number} created: ${job.issue?.title}`); jobsDone(); }
-      else toast(`Issue draft “${job.title}” failed: ${job.error}. Open + Add issue to retry or edit it.`, 'error');
-    }
-    for (const fn of jobListeners) fn(jobs);
-    if (!jobs.some(j => j.status === 'drafting')) { clearInterval(jobPoll); jobPoll = undefined; }
-  } catch { /* Try again on the next tick. */ }
-}
-function watchIssueJobs() { if (jobPoll === undefined) jobPoll = window.setInterval(() => void pollIssueJobs(), 3000); void pollIssueJobs(); }
-
-export function openMaintenanceIssueCreate(saved: () => void) {
-  jobsDone = saved;
-  const title = h('input', { type: 'text', maxlength: 200, placeholder: 'What should we improve?', 'aria-label': 'Issue title', required: true });
-  const description = h('textarea', { rows: 6, maxlength: 20000, placeholder: 'Describe the problem, expected behavior and useful context…', 'aria-label': 'Issue description' });
-  const error = h('p.maintenance-chat-error.hidden', { role: 'alert' });
-  const showError = (text: string) => { error.textContent = text; error.classList.toggle('hidden', !text); };
-  let sending = false;
-  let completed = false;
-  const draftKey = 'agent-office.maintenance-issue-draft-v1';
-  const save = () => { if (completed) return; try { localStorage.setItem(draftKey, JSON.stringify({ title: title.value, body: description.value, attachments: images.images, queue: queue.checked })); } catch { /* Storage unavailable. */ } };
-  const submit = h('button.btn.primary', { type: 'submit' }, 'Draft issue for review');
-  const images = imageComposer(() => { save(); submit.disabled = sending || images.uploading; }, showError);
-  const queue = h('input', { type: 'checkbox', checked: true });
-  const writer = h('select', { 'aria-label': 'Issue writer model' },
-    h('option', { value: 'auto' }, 'Auto: Codex gpt-6-luna, then Claude haiku'), h('option', { value: 'codex' }, 'Codex · gpt-6-luna'), h('option', { value: 'claude' }, 'Claude Code · haiku'));
-  const writerKey = 'agent-office.maintenance-issue-writer-v1';
-  try { const saved = localStorage.getItem(writerKey); if (saved === 'codex' || saved === 'claude') writer.value = saved; } catch { /* Storage unavailable. */ }
-  writer.addEventListener('change', () => { try { localStorage.setItem(writerKey, writer.value); } catch { /* Storage unavailable. */ } });
-  const updateLabel = () => { submit.textContent = 'Draft issue for review'; };
-  queue.addEventListener('change', () => { updateLabel(); save(); });
-  title.addEventListener('input', save); description.addEventListener('input', save);
-  try { const draft = JSON.parse(localStorage.getItem(draftKey) ?? 'null'); if (draft) { title.value = typeof draft.title === 'string' ? draft.title : ''; description.value = typeof draft.body === 'string' ? draft.body : ''; queue.checked = draft.queue !== false; images.set(Array.isArray(draft.attachments) ? draft.attachments.filter((i: MaintenanceAttachment) => i && /^[a-f0-9-]{36}$/.test(i.id)) : []); updateLabel(); } } catch { /* Storage unavailable. */ }
-  const jobsBox = h('div.maintenance-issue-jobs.hidden', { role: 'status', 'aria-live': 'polite' });
-  const renderJobs = (jobs: IssueJobView[]) => {
-    const shown = jobs.filter(j => j.status !== 'done');
-    jobsBox.classList.toggle('hidden', !shown.length);
-    jobsBox.replaceChildren(...shown.map(job => job.status === 'drafting' || job.status === 'saving'
-      ? h('p', {}, `⏳ Drafting “${job.title}” in the background. You can close this and keep using the office.`)
-      : job.draft ? h('p', {}, `Draft “${job.draft.title}” ready for review. ${job.error ?? ''} `, h('button', { type: 'button', onclick: () => { modal.close(); openIssueEditor({ job, saved: () => { saved(); void pollIssueJobs(); } }); } }, 'Review draft'), h('button', { type: 'button', onclick: () => void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()).catch(err => showError(err.message)) }, 'Dismiss'))
-      : h('p.maintenance-chat-error', {}, `Draft “${job.title}” failed: ${job.error} `,
-        h('button', { type: 'button', onclick: () => void maintenancePost('/api/maintenance/issue', { job: job.id, retry: true }).then(() => watchIssueJobs()).catch(err => showError(err.message)) }, 'Retry'), ' ',
-        h('button', { type: 'button', onclick: () => { if (job.number) { const issue = store.maintenanceIssues.items.find(issue => issue.number === job.number); if (!issue) { showError('Refresh the issue list before editing this issue.'); return; } modal.close(); openIssueEditor({ issue, saved }); return; } title.value = job.title; description.value = job.body; queue.checked = job.queue; writer.value = job.writer; updateLabel(); save(); void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()); } }, 'Edit in form'), ' ',
-        h('button', { type: 'button', onclick: () => void maintenancePost('/api/maintenance/issue', { job: job.id }).then(() => pollIssueJobs()) }, 'Dismiss'))));
-  };
-  jobListeners.add(renderJobs);
-  const form = h('form.modal.maintenance-issue-create', { role: 'dialog', 'aria-label': 'Create maintenance issue' },
-    h('header', {}, h('h2', {}, 'Capture an idea')),
-    h('div.body', {}, h('p', {}, `Drafts an issue for review in ${store.maintenanceIssues.repo ?? 'Agent Office’s repository'}. Nothing is created until you review and confirm. A small model (gpt-6-luna on Codex, or Claude Code with haiku if Codex is unavailable) reads the office source and crafts a technical issue from your idea. Drafting continues in the background, even if you close this. Maintenance keeps working on its current task.`), error, jobsBox, title, description, images.element,
-      h('label', {}, 'Written by ', writer),
-      h('label', {}, queue, ' Add to the Maintenance queue'), h('p.setting-note', {}, 'Start queued work when the agent is free. Screenshots stay with the queued item in the office; they are not published to GitHub.')),
-    h('footer', {}, submit));
-  images.bind(form);
-  const modal = openModal(form, { onClose: () => { save(); jobListeners.delete(renderJobs); } });
-  form.addEventListener('submit', e => {
-    e.preventDefault(); if (sending || images.uploading || !title.value.trim()) return;
-    if (!queue.checked && images.images.length) { showError('Keep “Add to the Maintenance queue” checked to retain screenshot evidence with this issue.'); return; }
-    sending = true; submit.textContent = 'Starting…'; submit.disabled = true; showError('');
-    void maintenancePost<IssueJobView>('/api/maintenance/issue', { title: title.value, body: description.value, queue: queue.checked, writer: writer.value, attachments: images.images.map(i => i.id) })
-      .then(job => { completed = true; try { localStorage.removeItem(draftKey); } catch { /* Storage unavailable. */ } jobStatus.set(job.id, 'drafting'); toast(`Drafting “${job.title}” in the background. You’ll be told when it is ready for review.`); modal.close(); watchIssueJobs(); })
-      .catch(err => { showError(err.message); sending = false; updateLabel(); submit.disabled = false; });
-  });
-  watchIssueJobs();
-  title.focus(); return modal;
-}
+const LANE_ORDER: MaintenanceLane[] = ['progress', 'review', 'queued', 'open', 'closed'];
+const CLOSED_SHOWN = 10;
+let closedOpen = false;
+let watching = false;
 
 export function workPanel(...args: Parameters<typeof workPanelParts>) {
   const { head, list } = workPanelParts(...args);
@@ -100,54 +31,97 @@ export function workPanel(...args: Parameters<typeof workPanelParts>) {
 
 /** The Work view in two parts: its controls (`head`), which the 2D view keeps fixed above the issue list (`list`), which scrolls. */
 export function workPanelParts(state: MaintenanceChatState, send: (message: ClientMsg) => void, start: (item: MaintenanceWorkItem) => void, correct: (context?: string) => void, refresh: () => void, viewConversation: (id: string) => void) {
+  // Crafting turns may have been started from another view or browser: show them here too.
+  if (!watching) { watching = true; watchIssueJobs(); }
   const head = h('div.maintenance-work-head');
   const panel = h('div.maintenance-work-list');
   const github = store.maintenanceIssues;
   const error = h('p.maintenance-chat-error.hidden', { role: 'alert' });
-  const act = (promise: Promise<unknown>) => void promise.then(refresh).catch(err => { error.textContent = err.message; error.classList.remove('hidden'); });
+  const fail = (message: string) => { error.textContent = message; error.classList.remove('hidden'); };
+  const act = (promise: Promise<unknown>) => void promise.then(() => { send({ t: 'maintenance.issues' }); refresh(); }).catch(err => fail(err.message));
   const work = state.work ?? [];
-  const queued = github.items.filter(maintenanceQueued).sort((a, b) => a.number - b.number);
+  const workOf = (issue: GhIssue) => work.find(i => i.number === issue.number);
+  const columns = maintenanceIssueColumns(github.items, issue => { const w = workOf(issue); return w ? { status: w.status, commits: w.commits.length } : undefined; });
+  const queued = columns.find(c => c.lane === 'queued')!.items;
   const busy = !!state.worker && !['idle', 'done', 'exited'].includes(state.worker.status);
   const blocked = busy || work.some(i => i.status === 'running') || state.stack?.phase === 'shipping' || state.stack?.validation?.phase === 'running';
-  const startIssue = (issue: typeof queued[number]) => start(work.find(i => i.number === issue.number) ?? { repo: github.repo ?? '', number: issue.number, title: issue.title, url: issue.url, status: 'queued', by: issue.author, at: 0, attachments: [], commits: [] });
-  head.append(h('div.maintenance-section-heading', {}, h('div', {}, h('h3', {}, 'Engineering backlog'), h('p', {}, `${github.repo ?? 'Agent Office'} · GitHub issues`)),
-    h('span.maintenance-add-wrap', {}, h('span.maintenance-add-orb', { 'aria-hidden': 'true' }), h('button.maintenance-add-issue', { type: 'button', onclick: () => openMaintenanceIssueCreate(refresh) }, '+ Add issue')),
-    h('button', { type: 'button', onclick: () => send({ t: 'maintenance.issues' }) }, 'Refresh issues')), error,
-    h('div.maintenance-work-intro', {}, h('button', { type: 'button', disabled: blocked || !queued.length || !!github.error || github.loading, onclick: () => startIssue(queued[0]) }, 'Start next queued issue'),
-      h('p', {}, 'Tell Maintenance what to capture or queue in Conversation. Queued issues carry the maintenance:queued label on GitHub; the oldest issue starts first.')));
+  const startIssue = (issue: GhIssue) => start(workOf(issue) ?? { repo: github.repo ?? '', number: issue.number, title: issue.title, url: issue.url, status: 'queued', by: issue.author, at: 0, attachments: [], commits: [] });
+  const crafting = issueCrafting();
+  const next = queued[0];
+  head.append(h('div.maintenance-section-heading', {}, h('div', {}, h('h3', {}, 'Engineering backlog'), h('p', {}, `${github.repo ?? 'Agent Office'} · GitHub issues${github.loading ? ' · refreshing…' : github.fetchedAt ? ` · updated ${timeAgo(github.fetchedAt)}` : ''}`)),
+    h('span.maintenance-add-wrap', {}, crafting ? h('span.maintenance-add-orb', { 'aria-hidden': 'true', title: 'The issue writer is drafting' }) : null,
+      h('button.maintenance-add-issue', { type: 'button', onclick: () => openMaintenanceIssueCreate(refresh) }, crafting ? '✍️ Drafting…' : hasIssueDraft() ? '✍️ Continue draft' : '+ Add issue')),
+    h('button', { type: 'button', title: 'Refresh issues from GitHub', disabled: github.loading, onclick: () => { send({ t: 'maintenance.issues' }); watchIssueJobs(); } }, '↻ Refresh')), error,
+    h('div.maintenance-work-intro', {}, h('button', { type: 'button', 'aria-label': 'Start next queued issue', title: next ? `Start #${next.number}: ${next.title}` : undefined, disabled: blocked || !next || !!github.error || github.loading, onclick: () => next && startIssue(next) }, next ? `▶ Start #${next.number}` : '▶ Start next'),
+      h('p', {}, next ? `Next up: ${next.title}` : 'Nothing queued. Queue an issue from the backlog to give Maintenance something to do.')));
   if (github.error) head.append(h('p.maintenance-chat-error', { role: 'alert' }, github.error));
-  for (const column of maintenanceIssueColumns(github.items)) {
-    panel.append(h('h4', {}, `${column.title} · ${column.items.length}`));
-    for (const issue of column.items) {
-      const item = work.find(i => i.number === issue.number);
-      const card = h('article.maintenance-work-card', {}, h('button.maintenance-issue-title', { type: 'button', onclick: () => openMaintenanceIssue(issue, correct, send) }, `#${issue.number} · ${issue.title}`),
-        h('a', { href: issue.url, target: '_blank', rel: 'noopener noreferrer' }, 'GitHub ↗'), h('button', { type: 'button', 'aria-label': `Edit issue #${issue.number}`, onclick: () => openIssueEditor({ issue, saved: refresh }) }, '✎ Edit'));
-      card.addEventListener('click', e => { if (!(e.target as Element).closest('button, a, img, input, select, textarea, summary')) openMaintenanceIssue(issue, correct, send); });
-      if (issue.state === 'OPEN' && issue.doneBy) card.append(h('small', {}, `✅ ${issue.doneBy}, still open on GitHub`));
-      if (issue.assignees.length) card.append(h('small', {}, `Assigned to ${issue.assignees.join(', ')}`));
-      if (item?.workerId) {
-        const activity = { queued: 'Waiting', running: 'Agent working', review: 'Agent turn ready for review', paused: 'Agent interrupted', done: 'Agent work reviewed' }[item.status];
-        card.append(h('small', {}, `Session: ${activity}`), h('button', { type: 'button', onclick: () => viewConversation(item.workerId!) }, 'Conversation'));
-      }
-      if (issue.state === 'OPEN') {
-        card.append(h('button', { type: 'button', title: `Close issue #${issue.number} on GitHub`, 'aria-label': `Close issue #${issue.number}`, disabled: item?.status === 'running', onclick: (e: Event) => {
-          const button = e.currentTarget as HTMLButtonElement;
-          button.disabled = true;
-          error.textContent = ''; error.classList.add('hidden');
-          void maintenancePost('/api/maintenance/queue', { number: issue.number, close: true })
-            .then(() => { send({ t: 'maintenance.issues' }); refresh(); })
-            .catch(err => { error.textContent = `Couldn't close #${issue.number}: ${err.message}`; error.classList.remove('hidden'); button.disabled = false; });
-        } }, '✓ Close'));
-        const inQueue = maintenanceQueued(issue);
-        card.append(h(inQueue ? 'button.is-danger' : 'button.is-primary', { type: 'button', disabled: item?.status === 'running', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, ...(inQueue ? { remove: true } : { attachments: item?.attachments.map(i => i.id) ?? [] }) })) }, inQueue ? 'Remove from queue' : 'Queue for Maintenance'));
-        if (inQueue) card.append(h('button.is-primary', { type: 'button', disabled: blocked || !!github.error || github.loading, onclick: () => (!issue.doneBy || confirm(`#${issue.number} looks already done (${issue.doneBy}) but is still open. Start Maintenance on it anyway?`)) && startIssue(issue) }, 'Start issue'));
-        if (item?.status === 'review') card.append(h('button.is-primary', { type: 'button', onclick: () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, reviewed: true })) }, 'Mark agent work reviewed'));
-      }
-      if (item?.attachments.length) card.append(imageEvidence(item.attachments));
-      for (const commit of item?.commits ?? []) card.append(h('button', { type: 'button', onclick: () => openStackChange(commit, { correct, watch() {} }) }, `${commit.sha} · ${commit.subject}`));
-      panel.append(card);
-    }
-    if (!column.items.length) panel.append(h('p.maintenance-muted', {}, github.loading ? 'Refreshing GitHub…' : 'No issues.'));
+
+  for (const lane of LANE_ORDER) {
+    const column = columns.find(c => c.lane === lane)!;
+    // Lanes that only matter while something is in them stay out of the way otherwise.
+    if (!column.items.length && (lane === 'progress' || lane === 'review')) continue;
+    const shown = lane === 'closed' ? column.items.slice(0, CLOSED_SHOWN) : column.items;
+    const cards = shown.map(issue => card(issue, lane, queued.indexOf(issue)));
+    const empty = column.items.length ? [] : [h('p.maintenance-muted', {}, github.loading ? 'Refreshing GitHub…' : lane === 'queued' ? 'Nothing queued.' : 'No open issues.')];
+    if (lane === 'closed') {
+      const details = h('details.work-lane.lane-closed', { open: closedOpen }, h('summary', {}, h('h4', {}, `${column.title}`, h('span.lane-count', {}, String(column.items.length)))), ...cards,
+        ...(column.items.length > CLOSED_SHOWN && github.repo ? [h('a.lane-more', { href: `https://github.com/${github.repo}/issues?q=is%3Aissue+is%3Aclosed`, target: '_blank', rel: 'noopener noreferrer' }, `Older closed issues on GitHub ↗`)] : []));
+      details.addEventListener('toggle', () => { closedOpen = details.open; });
+      panel.append(details);
+    } else panel.append(h(`section.work-lane.lane-${lane}`, {}, h('h4', {}, column.title, h('span.lane-count', {}, String(column.items.length))), ...cards, ...empty));
   }
   return { head, list: panel };
+
+  function card(issue: GhIssue, lane: MaintenanceLane, position: number) {
+    const item = workOf(issue);
+    const open = issue.state === 'OPEN';
+    const running = item?.status === 'running';
+    const tags: HTMLElement[] = [];
+    const pill = (text: string, tone = '') => tags.push(h(`span.issue-pill${tone ? `.${tone}` : ''}`, {}, text));
+    if (lane === 'progress') pill(running ? '🤖 Agent working' : `👤 ${issue.assignees.join(', ') || 'In progress'}`, 'is-active');
+    if (lane === 'review') {
+      if (item?.status === 'review') pill('🤖 Agent finished · review it', 'is-attention');
+      else if (item?.status === 'done') pill('👍 Reviewed · ship the stack', 'is-good');
+      else if (item?.status === 'paused') pill(`⏸ Interrupted · ${item.commits.length} commit${item.commits.length === 1 ? '' : 's'}`, 'is-attention');
+      if (issue.doneBy) pill(`✅ ${issue.doneBy}`, 'is-good');
+    }
+    if (lane === 'queued') pill(position === 0 ? '⏭ Next up' : `#${position + 1} in line`, position === 0 ? 'is-active' : '');
+    if (lane === 'open' && item?.status === 'paused') pill('⏸ Interrupted');
+    const labels = issue.labels.filter(l => l.name !== MAINTENANCE_QUEUE_LABEL).map(labelChip);
+    const meta = [issue.updatedAt ? `updated ${timeAgo(issue.updatedAt)}` : '', issue.author ? `by ${issue.author}` : '', lane !== 'progress' && issue.assignees.length ? `assigned to ${issue.assignees.join(', ')}` : ''].filter(Boolean).join(' · ');
+
+    const primary: HTMLElement[] = [];
+    const secondary: HTMLElement[] = [];
+    const button = (label: string, onclick: (e: Event) => void, attrs: Record<string, unknown> = {}) => h('button', { type: 'button', onclick, ...attrs }, label);
+    const close = (main: boolean) => button('✓ Close', (e: Event) => {
+      (e.currentTarget as HTMLButtonElement).disabled = true;
+      error.classList.add('hidden');
+      void maintenancePost('/api/maintenance/queue', { number: issue.number, close: true })
+        .then(() => { send({ t: 'maintenance.issues' }); refresh(); })
+        .catch(err => { fail(`Couldn't close #${issue.number}: ${err.message}`); (e.target as HTMLButtonElement).disabled = false; });
+    }, { class: main ? 'is-primary' : 'is-ghost', title: `Close issue #${issue.number} on GitHub`, 'aria-label': `Close issue #${issue.number}`, disabled: running });
+    if (item?.workerId && (lane === 'progress' || lane === 'review')) (lane === 'progress' ? primary : secondary).push(button('💬 Conversation', () => viewConversation(item.workerId!), { class: lane === 'progress' ? 'is-primary' : 'is-ghost' }));
+    if (open && lane === 'review') {
+      if (item?.status === 'review') primary.push(button('Mark reviewed', () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, reviewed: true })), { class: 'is-primary' }));
+      primary.push(close(item?.status !== 'review'));
+    }
+    if (open && lane === 'queued') {
+      primary.push(button('▶ Start', () => (!issue.doneBy || confirm(`#${issue.number} looks already done (${issue.doneBy}) but is still open. Start Maintenance on it anyway?`)) && startIssue(issue), { class: 'is-primary', disabled: blocked || !!github.error || github.loading }));
+      secondary.push(button('Unqueue', () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, remove: true })), { class: 'is-ghost', 'aria-label': 'Remove from queue', title: 'Remove from the Maintenance queue' }));
+    }
+    if (open && (lane === 'open' || lane === 'progress') && !running) (lane === 'open' ? primary : secondary).push(button('⏳ Queue', () => act(maintenancePost('/api/maintenance/queue', { number: issue.number, attachments: item?.attachments.map(i => i.id) ?? [] })), { class: lane === 'open' ? 'is-primary' : 'is-ghost', title: 'Add to the Maintenance queue' }));
+    secondary.push(button('✎ Edit', () => openIssueCrafter({ issue, saved: refresh }), { class: 'is-ghost', 'aria-label': `Edit issue #${issue.number}` }));
+    if (open && lane !== 'review') secondary.push(close(false));
+    secondary.push(h('a.is-ghost', { href: issue.url, target: '_blank', rel: 'noopener noreferrer' }, 'GitHub ↗'));
+
+    const el = h(`article.maintenance-work-card.card-${lane}`, {},
+      h('div.work-card-title', {}, h('span.issue-number', {}, `#${issue.number}`), h('button.maintenance-issue-title', { type: 'button', onclick: () => openMaintenanceIssue(issue, correct, send) }, issue.title)),
+      ...(tags.length || labels.length ? [h('div.work-card-tags', {}, ...tags, ...labels)] : []),
+      ...(meta ? [h('small.work-card-meta', {}, meta)] : []),
+      ...(item?.attachments.length ? [imageEvidence(item.attachments)] : []),
+      ...(item?.commits.length && lane !== 'closed' ? [h('div.work-card-commits', {}, ...item.commits.map(commit => h('button', { type: 'button', class: 'is-commit', onclick: () => openStackChange(commit, { correct, watch() {} }) }, h('code', {}, commit.sha.slice(0, 7)), ` ${commit.subject}`)))] : []),
+      ...(lane === 'closed' ? [] : [h('div.work-card-actions', {}, ...primary, h('span.grow'), ...secondary)]));
+    el.addEventListener('click', e => { if (!(e.target as Element).closest('button, a, img, input, select, textarea, summary')) openMaintenanceIssue(issue, correct, send); });
+    return el;
+  }
 }

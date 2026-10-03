@@ -50,8 +50,10 @@ import { DROP_MAX_BYTES } from '../shared/drops.js';
 import { MAX_FLOORS } from '../shared/floors.js';
 import { lookFromSeed, sanitizeLook } from '../shared/avatar.js';
 import { MAX_QUESTION, askLaptop, laptopModel, maintenanceTree, runMaintenanceModel } from './maintenance.js';
-import { draftMaintenanceIssue, isIssueWriter } from './maintenance-issue-draft.js';
-import { IssueJobs } from './maintenance-issue-jobs.js';
+import { craftMaintenanceIssue, draftMaintenanceIssue, isIssueWriter } from './maintenance-issue-draft.js';
+import { IssueJobs, type IssueJobInput } from './maintenance-issue-jobs.js';
+import { ISSUE_LABELS } from '../shared/maintenance-issues.js';
+
 import { MaintenanceChatArchive, TITLE_BRIEF } from './maintenance-chat.js';
 import { MaintenanceImages, MaintenanceWork, MAINTENANCE_IMAGE_MAX } from './maintenance-work.js';
 import { MaintenanceBoard } from './maintenance-board.js';
@@ -62,6 +64,9 @@ import { isThemePick } from '../shared/theme.js';
 import { PROMPTS, PROMPT_MAX, isPromptId } from '../shared/prompts.js';
 import { ROOF, isDrink } from '../shared/rooftop.js';
 import { isBarGame, tossOk, type BarGame } from '../shared/bargames.js';
+
+/** Only the crafter's own label vocabulary is written to GitHub. */
+const issueLabels = (v: unknown) => Array.isArray(v) ? [...new Set(v.filter((l): l is string => ISSUE_LABELS.some((k) => k.name === l)))] : undefined;
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -689,20 +694,26 @@ export async function startServer(cfg: Config) {
   const maintenanceImages = new MaintenanceImages(cfg.dataDir);
   const issueAs = new Map<string, ReturnType<typeof signins.ghAs>>();
   const issueJobs = new IssueJobs(
-    job => draftMaintenanceIssue(job.title, job.body, { writer: isIssueWriter(job.writer) ? job.writer : 'auto', instructions: job.instructions }),
+    job => {
+      const writer = isIssueWriter(job.writer) ? job.writer : 'auto';
+      if (!job.messages) return draftMaintenanceIssue(job.title, job.body, { writer, instructions: job.instructions });
+      // Screenshots the person attached are evidence the writer can look at too.
+      const images = maintenanceImages.prompt('', maintenanceImages.resolve(job.attachments)).trim();
+      return craftMaintenanceIssue(job.messages, { title: job.title, body: job.body, labels: job.labels ?? [] }, { writer, images });
+    },
     async (job, draft) => {
       const repo = maintenanceBoard.state.repo;
       if (!repo) throw new Error('No maintenance repository');
       const as = issueAs.get(job.id);
       if (typeof as === 'string') throw new Error(as);
-      if (job.number) return maintenanceBoard.edit(job.number, draft.title, draft.body, as);
+      if (job.number) return maintenanceBoard.edit(job.number, draft.title, draft.body, as, draft.labels);
       const images = maintenanceImages.resolve(job.attachments);
       // A failed queue update can be retried without creating a second issue.
       const existed = !!job.issue;
-      const issue = job.issue ?? await maintenanceBoard.create(draft.title, draft.body, as);
+      const issue = job.issue ?? await maintenanceBoard.create(draft.title, draft.body, as, draft.labels);
       job.issue = issue;
       if (existed) {
-        await maintenanceBoard.edit(issue.number, draft.title, draft.body, as);
+        await maintenanceBoard.edit(issue.number, draft.title, draft.body, as, draft.labels);
       }
       if (job.queue) {
         await maintenanceBoard.queue(issue.number, true, as);
@@ -915,7 +926,9 @@ export async function startServer(cfg: Config) {
   const maintenanceBoard = new MaintenanceBoard((state) => {
     if (state.repo && !state.loading && !state.error) maintenanceWork.syncIssues(state.repo, state.items);
     broadcast({ t: 'maintenance.issues', state });
-  }, undefined, () => maintenanceWork.list(maintenanceBoard.state.repo).flatMap((w) => w.commits.map((c) => ({ number: w.number, sha: c.sha }))));
+  }, undefined, () => maintenanceWork.list(maintenanceBoard.state.repo));
+  // Deferred: a change saved while the board is emitting must not broadcast ahead of that emit's older state.
+  maintenanceWork.onChange = () => queueMicrotask(() => maintenanceBoard.workChanged());
   maintenanceBoard.start();
 
   // --- HTTP ------------------------------------------------------------------------------------
@@ -1220,7 +1233,8 @@ export async function startServer(cfg: Config) {
       if (['/api/maintenance/issue', '/api/maintenance/queue'].includes(p) && req.method === 'POST') {
         if (!sameOrigin(req, cfg)) return send(res, 403, { error: 'Forbidden' });
         try {
-          const body = JSON.parse(await readBody(req, 24000));
+          // A crafting turn carries its whole conversation and draft.
+          const body = JSON.parse(await readBody(req, 160000));
           const repo = maintenanceBoard.state.repo;
           if (!repo) throw new Error('No maintenance repository');
           const by = session.account?.name ?? 'Office user';
@@ -1228,19 +1242,32 @@ export async function startServer(cfg: Config) {
             const as = session.account ? signins.ghAs(session.account.id) : undefined;
             if (typeof as === 'string') throw new Error(as);
             if (typeof body.job === 'string') {
-              if (body.confirm === true) return send(res, 200, await issueJobs.confirm(body.job, str(body.title, 201), str(body.body, 20001)));
+              if (body.confirm === true) return send(res, 200, await issueJobs.confirm(body.job, str(body.title, 201), str(body.body, 20001), issueLabels(body.labels)));
               if (body.retry === true) return send(res, 202, issueJobs.retry(body.job));
               issueJobs.dismiss(body.job); issueAs.delete(body.job);
               return send(res, 200, { ok: true });
             }
             const number = body.number === undefined ? undefined : Number(body.number);
             if (number !== undefined && (!Number.isSafeInteger(number) || number <= 0)) throw new Error('Bad issue number');
-            if (number && body.save === true) return send(res, 200, await maintenanceBoard.edit(number, str(body.title, 201), str(body.body, 20001), as));
+            if (number && body.save === true) return send(res, 200, await maintenanceBoard.edit(number, str(body.title, 201), str(body.body, 20001), as, issueLabels(body.labels)));
             maintenanceImages.resolve(body.attachments ?? []);
-            const existing = number ? await maintenanceBoard.issue(number) : undefined;
-            const input = { title: existing?.title ?? str(body.title, 201), body: existing?.body ?? str(body.body, 20001), queue: body.queue === true, writer: isIssueWriter(body.writer) ? body.writer : 'auto', attachments: Array.isArray(body.attachments) ? body.attachments.map(String) : [], number, instructions: number ? str(body.instructions, 20001) : undefined };
-            if (!input.title.trim() || input.title.length > 200 || input.body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
-            if (number && (!input.instructions?.trim() || input.instructions.length > 20000)) throw new Error('Describe the requested changes (up to 20,000 characters).');
+            const attachments = Array.isArray(body.attachments) ? body.attachments.map(String) : [];
+            const writer = isIssueWriter(body.writer) ? body.writer : 'auto';
+            let input: IssueJobInput;
+            if (Array.isArray(body.messages)) {
+              // A crafting turn: the conversation, and the draft as it stands in the crafter (hand edits included).
+              const messages = body.messages.slice(-40).filter((m: { role?: unknown; content?: unknown }) => (m?.role === 'user' || m?.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+                .map((m: { role: 'user' | 'assistant'; content: string }) => ({ role: m.role, content: m.content.slice(0, 8000) }));
+              if (!messages.some((m: { role: string }) => m.role === 'user')) throw new Error('Say what the issue is about first.');
+              const first = messages.find((m: { role: string }) => m.role === 'user').content.replace(/\s+/g, ' ').trim();
+              input = { title: str(body.title, 201).trim() || first.slice(0, 80), body: str(body.body, 20001), queue: body.queue === true, writer, attachments, number, messages, labels: issueLabels(body.labels) ?? [] };
+              if (input.title.length > 200 || input.body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
+            } else {
+              const existing = number ? await maintenanceBoard.issue(number) : undefined;
+              input = { title: existing?.title ?? str(body.title, 201), body: existing?.body ?? str(body.body, 20001), queue: body.queue === true, writer, attachments, number, instructions: number ? str(body.instructions, 20001) : undefined };
+              if (!input.title.trim() || input.title.length > 200 || input.body.length > 20000) throw new Error('Use a title up to 200 characters and a description up to 20,000.');
+              if (number && (!input.instructions?.trim() || input.instructions.length > 20000)) throw new Error('Describe the requested changes (up to 20,000 characters).');
+            }
             const job = issueJobs.start(input, by);
             issueAs.set(job.id, as);
             return send(res, 202, job);

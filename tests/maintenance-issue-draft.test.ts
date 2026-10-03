@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { draftMaintenanceIssue, parseIssueDraft } from '../src/server/maintenance-issue-draft.js';
+import { craftMaintenanceIssue, draftMaintenanceIssue, parseIssueCraft, parseIssueDraft } from '../src/server/maintenance-issue-draft.js';
 
 test('issue drafts reject malformed, missing and oversized model output', () => {
   for (const output of ['no JSON', 'null', '{}', '{"title":"ok","body":""}', JSON.stringify({ title: 'x'.repeat(201), body: 'ok' }), JSON.stringify({ title: 'ok', body: 'x'.repeat(20001) })]) {
@@ -61,5 +61,30 @@ test('issue writing falls back to Claude Code with haiku when Codex fails', { sk
     assert.deepEqual(await draftMaintenanceIssue('lighting', 'Make it brighter', opts), withCode);
     writeFileSync(claude, '#!/bin/sh\ncat >/dev/null\necho "not logged in" >&2\nexit 1\n');
     await assert.rejects(draftMaintenanceIssue('lighting', '', opts), /codex: usage limit.*claude: not logged in/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('crafting turns keep a reply, the whole issue and only known labels', () => {
+  const craft = parseIssueCraft(JSON.stringify({ reply: ' Added acceptance criteria. ', title: 'Fix queue', body: '## Scope', labels: ['ui', 'made-up', 'ui', 'bug', 'polish', 'docs'] }));
+  assert.deepEqual(craft, { reply: 'Added acceptance criteria.', title: 'Fix queue', body: '## Scope', labels: ['ui', 'bug', 'polish'] });
+  assert.equal(parseIssueCraft('{"title":"t","body":"b"}').reply, 'Updated the issue.');
+  assert.throws(() => parseIssueCraft('{"reply":"hi"}'), /Issue writer returned/);
+});
+
+test('a crafting turn sends the conversation and the hand-edited draft to the writer', { skip: process.platform === 'win32' }, async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'ao-issue-crafter-'));
+  try {
+    const codex = path.join(dir, 'codex'), argsFile = path.join(dir, 'args');
+    const answer = { reply: 'Scoped it to the Work tab.', title: 'Work tab queue', body: '## Acceptance criteria\nCards move.', labels: ['ui'] };
+    writeFileSync(codex, `#!/bin/sh\nprintf '%s\\n' "$@" > '${argsFile}'\ncat > '${argsFile}.stdin'\ncat <<'RESPONSE'\n${JSON.stringify(answer)}\nRESPONSE\n`);
+    chmodSync(codex, 0o755);
+    const opts = { writer: 'codex' as const, codex, env: { PATH: '/usr/bin:/bin', AGENT_OFFICE_SOURCE: dir } };
+    const craft = await craftMaintenanceIssue([{ role: 'user', content: 'The queue never updates' }, { role: 'assistant', content: 'Which view?' }, { role: 'user', content: 'The Work tab' }], { title: 'My hand-edited title', body: '', labels: [] }, opts);
+    assert.deepEqual(craft, answer);
+    const sent = readFileSync(argsFile, 'utf8') + readFileSync(argsFile + '.stdin', 'utf8');
+    assert.match(sent, /The Work tab/);
+    assert.match(sent, /My hand-edited title/);
+    assert.match(sent, /keep their edits/);
+    await assert.rejects(craftMaintenanceIssue([{ role: 'assistant', content: 'Hi' }], { title: '', body: '', labels: [] }, opts), /Say what the issue is about/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

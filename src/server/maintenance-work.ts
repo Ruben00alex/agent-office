@@ -41,6 +41,8 @@ export class MaintenanceImages {
 export class MaintenanceWork {
   private file: string;
   private items: MaintenanceWorkItem[] = [];
+  /** Called after every saved change, so the issue boards can move cards with it. */
+  onChange: () => void = () => {};
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
     this.file = path.join(dataDir, 'maintenance-work.json');
@@ -105,11 +107,12 @@ export class MaintenanceWork {
       if (item.status !== 'running' && !(['review', 'paused'].includes(item.status) && worker?.id === item.workerId)) continue;
       const added = commits.filter(c => !item.baseline?.includes(c.sha));
       if (JSON.stringify(item.commits) !== JSON.stringify(added)) { item.commits = added; changed = true; }
-      if (!worker || worker.id !== item.workerId || worker.status === 'exited') { item.status = 'paused'; changed = true; }
+      // Ending the session after its turn finished leaves the work waiting for review, not interrupted.
+      if (!worker || worker.id !== item.workerId || worker.status === 'exited') { if (item.status !== 'review') { item.status = 'paused'; changed = true; } }
       else if (worker.status === 'done' && item.status !== 'review') { item.status = 'review'; changed = true; }
       else if (['starting', 'working', 'needs_input'].includes(worker.status) && ['review', 'paused'].includes(item.status)) { item.status = 'running'; changed = true; }
     }
     if (changed) this.save();
   }
-  private save() { writeFileSync(this.file + '.tmp', JSON.stringify(this.items), { mode: 0o600 }); renameSync(this.file + '.tmp', this.file); }
+  private save() { writeFileSync(this.file + '.tmp', JSON.stringify(this.items), { mode: 0o600 }); renameSync(this.file + '.tmp', this.file); this.onChange(); }
 }

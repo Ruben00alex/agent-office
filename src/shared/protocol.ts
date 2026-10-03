@@ -408,6 +408,8 @@ export interface GhIssue {
   comments: number;
   /** Set on an open issue that looks finished already: the merged PR or shipped commit that addressed it, e.g. "PR #12 merged". */
   doneBy?: string;
+  /** Maintenance issues only: the office's own execution record for this issue, if it was ever queued or started. */
+  work?: { status: MaintenanceWorkItem['status']; commits: number };
 }
 
 export interface GhPull {

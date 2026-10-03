@@ -62,17 +62,15 @@ try {
   await page.getByRole('button', { name: 'Work & issues', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: 'Start next queued issue', exact: true }).isDisabled(), true);
   await page.screenshot({ path: '/tmp/maintenance-workspace-backlog.png', animations: 'disabled' });
+  // Issues are written in the crafter (tests/maintenance-crafter.browser.mjs); here one arrives queued with a screenshot.
   await page.getByRole('button', { name: '+ Add issue', exact: true }).first().click();
-  await page.getByRole('textbox', { name: 'Issue title', exact: true }).fill('A room for design reviews');
-  await page.getByRole('textbox', { name: 'Issue description', exact: true }).fill('Keep this idea while Maintenance finishes its current task.');
-  await page.getByRole('dialog', { name: 'Create maintenance issue', exact: true }).getByLabel('Choose screenshots').setInputFiles({ name: 'screen.png', mimeType: 'image/png', buffer: png });
-  await page.getByRole('button', { name: 'Remove screen.png', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Create GitHub issue & queue', exact: true }).click();
-  await page.getByRole('button', { name: '#43 · A room for design reviews', exact: true }).waitFor();
-  assert.equal(posted[0].queue, true); assert.deepEqual(posted[0].attachments, [image.id]);
+  await page.getByRole('dialog', { name: 'Issue crafter', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  { const created = { ...issue(43), title: 'A room for design reviews', labels: [{ name: 'maintenance:queued', color: '#f08c00' }] }; githubIssues.push(created); queue.push({ repo, ...created, status: 'queued', at: 3, by: 'Sam', attachments: [image], commits: [] }); await page.evaluate(() => store.emit('workers')); await publishIssues(); }
+  await page.getByRole('button', { name: 'A room for design reviews', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => sent.some(m => ['worker.kill', 'worker.prompt', 'maintenance.chat.send'].includes(m.t))), false, 'Capturing an idea dispatched work');
   await page.getByRole('button', { name: 'Remove from queue', exact: true }).first().click();
-  await page.waitForFunction(() => !document.querySelector('.maintenance-work-view').textContent.includes('Queued · 2'));
+  await page.waitForFunction(() => document.querySelector('.lane-queued .lane-count')?.textContent === '1');
   assert.ok(posted.some(p => p.remove === true && p.number === 42));
 
   worker = { ...worker, status: 'done', activity: 'All checks passed; change is on the stack' }; queue[0].status = 'review'; queue[0].commits = stack.changes;
@@ -107,7 +105,7 @@ try {
   githubIssues.find(i => i.number === 43).title = 'Renamed on GitHub';
   githubIssues.find(i => i.number === 43).state = 'CLOSED';
   await publishIssues();
-  await page.getByRole('button', { name: '#43 · Renamed on GitHub', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Renamed on GitHub', exact: true }).waitFor({ state: 'attached' });
   assert.equal(await page.getByRole('button', { name: 'Start next queued issue', exact: true }).isDisabled(), true);
   await page.screenshot({ path: '/tmp/maintenance-github-groundtruth.png', animations: 'disabled' });
   await page.getByRole('button', { name: 'Review & checks', exact: true }).click();
