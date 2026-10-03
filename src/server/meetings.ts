@@ -50,6 +50,8 @@ const PUMP_MS = 3000;
 const START_GRACE_MS = 60_000;
 /** How much of the output file the board in the room shows. */
 const PREVIEW_CHARS = 6000;
+/** The most of the output file the full-screen reader loads. */
+const OUTPUT_READ_MAX = 400_000;
 const PAST_MAX = 20;
 const PROMPT_MAX = 20_000;
 const ROLE_MAX = 40;
@@ -659,6 +661,22 @@ export class MeetingRoom {
     } catch {
       return '';
     }
+  }
+
+  /** The whole output file of the meeting at the table (or its saved copy once the worktree is gone), for the reader. */
+  readOutput(): { path: string; text: string; truncated: boolean } | undefined {
+    const m = this.current;
+    if (!m) return undefined;
+    const saved = path.join(this.dataDir, 'meetings', m.id, `output-${path.basename(m.output)}`);
+    for (const file of [path.join(this.cwd(m), m.output), saved]) {
+      try {
+        const text = readStart(file, OUTPUT_READ_MAX + 4);
+        return { path: m.output, text: text.slice(0, OUTPUT_READ_MAX), truncated: text.length > OUTPUT_READ_MAX };
+      } catch {
+        // not there: try the saved copy
+      }
+    }
+    return undefined;
   }
 
   /** Reads what's written of the output so far, for the board in the room. Returns whether it changed. */

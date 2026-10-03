@@ -3,6 +3,7 @@ import { fmtTokens, type Meeting, type MeetingPattern, type MeetingTurn } from '
 import type { Net } from '../net';
 import { store } from '../state';
 import { h, openModal, timeAgo, toast, STATUS_LABEL, type Modal } from './dom';
+import { markdownFile } from './markdown';
 import { confirmDialog } from './prompt';
 import { providerPicker } from './provider';
 import { officePrompt } from './prompts';
@@ -103,7 +104,7 @@ export function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, n
     h('p.meeting-line', {}, running ? `${meetingStage(m)} · called by ${m.calledBy} ${timeAgo(new Date(m.startedAt).toISOString())}` : m.status === 'done' ? `✅ Wrote ${m.output} in ${m.round} round${m.round === 1 ? '' : 's'}` : `⛔ Stopped in round ${m.round}: ${m.reason ?? 'stopped'}`),
     h('div.meeting-budget', { title: `${m.tokens.toLocaleString()} of ${m.budget.toLocaleString()} tokens` }, h('div.meeting-bar', {}, h('i', { style: `width:${(f * 100).toFixed(1)}%;background:${f > 0.9 ? 'var(--bad)' : f > 0.7 ? 'var(--warn)' : 'var(--good)'}` })), h('span', {}, `${meetingSpend(m)} of ${fmtTokens(m.budget)} tokens`)),
     seats,
-    h('div.meeting-out', {}, h('div.meeting-out-head', {}, h('b', {}, '📄 '), h('code', {}, m.output), where, review), h('pre.meeting-preview', {}, m.preview?.trim() ? m.preview : running ? 'Nothing written yet.' : 'Nothing was written.')),
+    h('div.meeting-out', {}, h('div.meeting-out-head', {}, h('b', {}, '📄 '), h('code', {}, m.output), where, review, m.preview?.trim() ? h('button.btn.small', { type: 'button', onclick: () => openMeetingReader(m.title, m.output) }, '📖 Read it') : null), h('pre.meeting-preview', {}, m.preview?.trim() ? m.preview : running ? 'Nothing written yet.' : 'Nothing was written.')),
     store.meeting.past.length
       ? h('details.meeting-past', {}, h('summary', {}, `Earlier meetings (${store.meeting.past.length})`), h('ul', {}, ...store.meeting.past.map((r) => h('li', { title: `Called by ${r.calledBy}` }, h('b', {}, r.title), h('div.muted', {}, r.summary)))))
       : null,
@@ -119,6 +120,20 @@ export function renderStatus(m: Meeting, body: HTMLElement, foot: HTMLElement, n
     !running ? h('button.btn.primary', { type: 'button', onclick: callAnother }, '🤝 Call a meeting…') : null,
     ),
   );
+}
+
+/** The meeting's output file, rendered to read in a window of its own that fills the screen. */
+export function openMeetingReader(title: string, file: string) {
+  const body = h('div.body.meeting-reader-body', {}, h('p.muted', {}, 'Loading…'));
+  const el = h('div.modal.meeting-reader', { role: 'dialog', 'aria-label': title }, h('header', {}, h('h2', {}, '📄 ', title), h('code.meeting-reader-file', {}, file)), body);
+  openModal(el, { reading: true });
+  void fetch('/api/meeting/output', { cache: 'no-store' })
+    .then(async (res) => {
+      const r = (await res.json()) as { text?: string; truncated?: boolean; error?: string };
+      if (!res.ok || r.text === undefined) throw new Error(r.error ?? `HTTP ${res.status}`);
+      body.replaceChildren(r.text.trim() ? markdownFile(r.text) : h('p.muted', {}, 'The file is empty.'), ...(r.truncated ? [h('p.muted', {}, 'Only the start of this file is shown.')] : []));
+    })
+    .catch((err) => body.replaceChildren(h('p.bad', { role: 'alert' }, `Couldn't read ${file}: ${(err as Error).message}`)));
 }
 
 export const present = (...xs: (Node | null)[]): Node[] => xs.filter((x): x is Node => x !== null);

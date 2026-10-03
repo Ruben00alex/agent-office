@@ -1310,6 +1310,10 @@ export async function startServer(cfg: Config) {
         } catch (err) { return send(res, 400, { error: (err as Error).message }); }
         return send(res, 404, { error: 'Not found' });
       }
+      if (p === '/api/meeting/output' && req.method === 'GET') {
+        const out = floor?.meetings.readOutput();
+        return out ? send(res, 200, out) : send(res, 404, { error: 'Nothing was written' });
+      }
       if (p === '/api/search' && req.method === 'GET') return send(res, 200, search(url.searchParams.get('q') ?? '', floor));
       if (p.startsWith('/api/gh/') && req.method === 'GET') {
         // What the issue and PR windows show beyond the board cards (see github.ts).
