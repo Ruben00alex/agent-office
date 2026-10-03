@@ -117,7 +117,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
     const worker = state?.worker;
     model.repaint();
     const archived = !newConversation && !!selected && selected !== worker?.id;
-    const waiting = worker?.status === 'needs_input';
+    const waiting = worker?.status === 'needs_input' && state?.terminalInputRequired !== false;
     // Stuck on a provider whose plan is used up, a message moves it to one with room (the server picks it).
     const spent = !!worker && !!fullPlanWindow(worker.provider === 'claude' ? store.limits : worker.provider === 'codex' ? store.codexLimits : undefined);
     const busy = !!worker && !['idle', 'done', 'exited'].includes(worker.status);

@@ -1864,3 +1864,48 @@ test('Issues and PR agents start fresh only after their current turn finishes', 
     assert.ok(taskPrompt(launch.args.at(-1)!).endsWith('\n\nFresh'), 'new launch includes its station brief and fresh request');
   }
 });
+
+test('Product Lead accepts follow-ups with a stale attention badge but protects real Codex prompts', async (t) => {
+  const f = fixture();
+  isolateProviderEnvironment(f, t);
+  const previousLog = process.env.FAKE_AGENT_LOG;
+  process.env.FAKE_AGENT_LOG = f.log;
+  t.after(() => { if (previousLog === undefined) delete process.env.FAKE_AGENT_LOG; else process.env.FAKE_AGENT_LOG = previousLog; f.close(); });
+  const workers = new WorkerManager(f.root, f.data, f.codex, [], { url: 'http://127.0.0.1:1', token: '' }, { ...events([]), conversation: () => {} }, ledger(f.data));
+  t.after(() => workers.shutdown());
+  const first = workers.station('station-product', 'Alex', 'Discuss delivery', undefined, undefined, { provider: 'codex' });
+  if (typeof first === 'string') throw Error(first);
+  const invocation = (await waitFor(f.read, rows => rows.some(r => r.env.workerId === first.info.id))).find(r => r.env.workerId === first.info.id)!;
+  const hook = (event: string, extra = {}) => workers.handleCodexHook(first.info.id, invocation.env.hookToken!, event, { session_id: 'product-replies', ...extra });
+  hook('SessionStart');
+  hook('Stop');
+  // A status badge alone must not force the person out of their chat.
+  first.info.status = 'needs_input';
+  assert.equal(workers.productNeedsTerminal(first.info.id), false);
+  const follow = workers.station('station-product', 'Alex', 'Ship the desktop app', undefined, { thread: first.info.id });
+  assert.equal(typeof follow, 'object');
+  if (typeof follow === 'string') throw Error(follow);
+  assert.equal(follow.info.id, first.info.id);
+  assert.equal(follow.hired, false);
+  assert.equal(follow.info.status, 'working');
+  hook('PreToolUse', { tool_name: 'request_user_input', tool_use_id: 'question' });
+  assert.equal(workers.productNeedsTerminal(first.info.id), true);
+  assert.match(workers.station('station-product', 'Alex', 'Follow up') as string, /terminal/);
+  hook('PostToolUse', { tool_name: 'request_user_input', tool_use_id: 'question' });
+  hook('PermissionRequest', { tool_name: 'exec_command' });
+  // Automatic review may still be in its grace period.
+  if (first.info.status === 'needs_input') assert.equal(workers.productNeedsTerminal(first.info.id), true);
+  const session = 'product-replies';
+  const dir = path.join(process.env.CODEX_HOME!, 'sessions');
+  mkdirSync(dir, { recursive: true });
+  const transcript = path.join(dir, `rollout-${session}.jsonl`);
+  writeFileSync(transcript, [
+    { type: 'session_meta', payload: { id: session } },
+    { type: 'response_item', timestamp: new Date().toISOString(), payload: { role: 'assistant', phase: 'final_answer', content: [{ type: 'output_text', text: 'Keep the desktop delivery model.' }] } },
+  ].map(row => JSON.stringify(row) + '\n').join(''));
+  // The final transcript must recover even if the Stop hook never arrives.
+  hook('PreToolUse', { tool_name: 'read_file', tool_use_id: 'scan', transcript_path: transcript });
+  await waitFor(() => first.info.status, status => status === 'done');
+  assert.equal(workers.productNeedsTerminal(first.info.id), false);
+  assert.equal(typeof workers.station('station-product', 'Alex', 'Keep talking', undefined, { thread: first.info.id }), 'object');
+});

@@ -289,11 +289,11 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
         button('Review stack →', () => { view = maintenanceView = 'review'; reviewKey = ''; paintFrame(); paintView(); }),
       );
     }
-    attention.classList.toggle('hidden', w?.status !== 'needs_input');
-    fill(attention, w?.status === 'needs_input' ? h('b', {}, 'Your attention is needed') : null, w?.status === 'needs_input' ? h('p', {}, w.activity ?? 'Answer the prompt in the live console.') : null);
+    const waiting = w?.status === 'needs_input' && (maintenance || state?.terminalInputRequired !== false);
+    attention.classList.toggle('hidden', !waiting);
+    fill(attention, waiting ? h('b', {}, 'Your attention is needed') : null, waiting ? h('p', {}, w.activity ?? 'Answer the prompt in the live console.') : null);
     model.repaint();
     const archived = !newConversation && !!selected && selected !== w?.id;
-    const waiting = w?.status === 'needs_input';
     const busy = !!w && !['idle', 'done', 'exited'].includes(w.status);
     // The state of things is the page's subtitle; only what needs saying stands over the composer.
     if (historyFailed) setSubtitle('Connection unavailable · retrying', 'warn');

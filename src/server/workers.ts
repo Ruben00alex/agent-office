@@ -624,13 +624,22 @@ export class WorkerManager {
       return typeof info === 'string' ? info : { info, hired: true };
     }
     // Typed into the question it's asking, the prompt would answer it.
-    if (w.info.status === 'needs_input') return `The ${w.info.name} is waiting on an answer in its terminal`;
+    if (w.info.status === 'needs_input' && (deskId !== PRODUCT_DESK || this.productNeedsTerminal(w.info.id))) return `The ${w.info.name} is waiting on an answer in its terminal`;
     const running = !!(w.pty || w.dsh);
     if (!running) w.info.lastInput = { by, at: Date.now() };
     const err = running ? this.prompt(w.info.id, clean, by) : this.resume(w.info.id, clean);
     if (!err && !running) this.recordMaintenanceRequest(w, clean, by);
-    if (!err && running && isChatDesk(deskId) && ['idle', 'done'].includes(w.info.status)) this.setStatus(w, 'working');
+    if (!err && running && isChatDesk(deskId) && ['idle', 'done', 'needs_input'].includes(w.info.status)) this.setStatus(w, 'working');
     return err ?? { info: w.info, hired: false };
+  }
+
+  /** A stale Codex needs_input badge is not evidence of an open terminal prompt. */
+  productNeedsTerminal(id: string): boolean {
+    const w = this.workers.get(id);
+    if (!w || w.info.status !== 'needs_input') return false;
+    if (w.info.provider !== 'codex') return true;
+    return !!(w.bootBlocked || w.permissionTimer || w.permissionReview || w.codexPending.size
+      || w.codexPermissionUnknown || w.codexQuestions.size || w.codexQuestionUnknown);
   }
 
   /** Whether a board agent is on the provider, model and effort asked for, so asking with it needn't hire afresh. */
@@ -2140,6 +2149,21 @@ export class WorkerManager {
     if (!reader) { reader = new MaintenanceTranscriptReader(); this.chatReaders.set(w, reader); }
     const messages = reader.read(file, w.info.sessionId, provider ?? 'claude', w.codexHome);
     if (messages.length) this.events.conversation(w.info, messages);
+    // The public final reply proves this Codex turn ended even if its Stop hook was lost.
+    // Never let an older reply clear a prompt from a newer turn.
+    const last = messages.at(-1);
+    if (w.info.deskId === PRODUCT_DESK && provider === 'codex' && last?.role === 'assistant'
+      && last.phase === 'final_answer' && last.at >= (w.info.lastInput?.at ?? w.info.createdAt)
+      && last.at >= (w.permissionReview?.since ?? 0) && ['working', 'needs_input'].includes(w.info.status)) {
+      w.bootBlocked = false;
+      w.codexTools.clear();
+      w.codexPending.clear();
+      w.codexQuestions.clear();
+      w.codexQuestionUnknown = false;
+      w.codexPermissionUnknown = false;
+      w.codexPermissionTool = undefined;
+      this.setStatus(w, 'done');
+    }
   }
 
   private scanUsage(w: Worker) {

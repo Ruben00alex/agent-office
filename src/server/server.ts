@@ -1283,6 +1283,7 @@ export async function startServer(cfg: Config) {
           conversations: productHistory.list(floor.def.id),
           conversation: id ? productHistory.page(id, url.searchParams.get('before') ?? undefined) : undefined,
           worker: agent, floor: floor.def.id, floorName: floor.def.name,
+          terminalInputRequired: !!agent && floor.workers.productNeedsTerminal(agent.id),
           richReplies: !agent || ['codex', 'claude', 'custom'].includes(agent.provider ?? ''),
         });
       }
