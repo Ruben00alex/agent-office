@@ -9,7 +9,8 @@ import { isAsleep } from '../../shared/status';
 import { changedImageType, type ChangedFile, type ChangesState, type ServerMsg, type WorkerInfo } from '../../shared/protocol';
 import { clip, h, STATUS_LABEL, timeAgo, toast } from '../ui/dom';
 import { modelBadge, providerLabel } from '../ui/provider';
-import { usageLabel } from '../ui/usage';
+import { fmtCost, usageLabel } from '../ui/usage';
+import { MEETING_PATTERNS } from '../../shared/meetings';
 import { confirmDialog, openPrompt } from '../ui/prompt';
 import { pathLabel, plusMinus, renderDiff, renderPreview, STATUS_WORD } from '../ui/changes';
 import { byUrgency, waitingInOrder, waitingLabel } from '../nextup';
@@ -64,13 +65,33 @@ function card(w: WorkerInfo): HTMLElement {
   );
 }
 
+/** Today's spend and the plan windows that are running low, as one tappable line (the 3D office keeps these on screen). */
+function usageStrip(): HTMLElement | null {
+  const u = store.usage;
+  const windows = [...store.limits.windows.map((w) => ({ ...w, label: `Claude ${w.label}` })), ...store.codexLimits.windows.map((w) => ({ ...w, label: `Codex ${w.label}` }))];
+  if (!windows.length && !u.today.cost && !u.budget) return null;
+  const worst = windows.reduce((m, w) => Math.max(m, w.pct), 0);
+  const bits = [`💸 Today ${fmtCost(u.today.cost)}${u.budget !== undefined ? ` of ${fmtCost(u.budget)}` : ''}`, ...windows.map((w) => `${w.label} ${Math.round(w.pct)}%`)];
+  return h('button.lp-row.lite-usage', { type: 'button', class: worst >= 90 ? 'over' : worst >= 75 ? 'near' : '', onclick: () => go('spend'), 'aria-label': 'Usage and limits' }, h('span.txt', {}, h('small', {}, 'Usage'), h('b', {}, bits.join(' · '))), h('span.chev', { 'aria-hidden': 'true' }, '›'));
+}
+
+/** The meeting at the table (or the last one, until the room is cleared): a way back into it from here. */
+function meetingStrip(): HTMLElement | null {
+  const m = store.meeting.current;
+  if (!m) return null;
+  const p = MEETING_PATTERNS[m.pattern];
+  const state = m.status === 'running' ? 'in progress' : m.status === 'done' ? 'finished' : 'stopped';
+  return h('button.lp-row.lite-meeting', { type: 'button', onclick: () => go('work/meeting') }, h('span.ico', { 'aria-hidden': 'true' }, '🤝'), h('span.txt', {}, h('small', {}, `Meeting ${state}`), h('b', {}, `${p.icon} ${m.title}`)), h('span.chev', { 'aria-hidden': 'true' }, '›'));
+}
+
 export function workersScreen(): Screen {
+  const strips = h('div.lite-strips');
   const waitingNow = h('span.lite-waiting');
   const floorBox = h('div.lp-floor');
   const elsewhere = h('div.lite-elsewhere');
   const list = h('ul.lite-workers');
   const el = layout({
-    top: [floorBox, elsewhere, h('h2.lp-h', {}, h('span', {}, 'Workers'), waitingNow)],
+    top: [floorBox, strips, elsewhere, h('h2.lp-h', {}, h('span', {}, 'Workers'), waitingNow)],
     scroll: [list],
     bottom: [actions(button('✨ New task', () => sendToWorker('✨ New task'), 'primary'), button('🐚 Shell', openShell, '', 'A shared shell at a free desk'))],
   }).el;
@@ -86,6 +107,7 @@ export function workersScreen(): Screen {
         h('span.chev', { 'aria-hidden': 'true' }, '⌄'),
       ),
     );
+    strips.replaceChildren(...[usageStrip(), meetingStrip()].filter((x): x is HTMLElement => !!x));
     const others = store.floors.filter((o) => o.id !== store.floor && o.waiting > 0 && !o.cloning);
     elsewhere.replaceChildren(...others.map((o) => h('button.btn.lite-go', { type: 'button', onclick: () => net.send({ t: 'floor.go', floor: o.id }) }, `🙋 ${o.waiting} waiting on ${o.name}`, h('span', { 'aria-hidden': 'true' }, '→'))));
     const ws = byUrgency(store.workers.values());
@@ -93,7 +115,7 @@ export function workersScreen(): Screen {
     if (!ws.length) list.append(h('li.lite-empty', {}, store.project ? 'Nobody is working on this floor. ✨ New task hires someone.' : 'No workers here.'));
     waitingNow.textContent = waitingLabel(waitingInOrder(ws));
   };
-  const off = live(on, ['workers', 'project', 'floor', 'floors'], paint);
+  const off = live(on, ['workers', 'project', 'floor', 'floors', 'usage', 'limits', 'meeting'], paint);
   // "3m ago" moves on by itself.
   const timer = setInterval(paint, 30_000);
   return {

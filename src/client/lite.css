@@ -281,3 +281,9 @@ body[data-root="0"] .lite-main:has(> .lp-fill, > .lite-maintenance-workspace) { 
   .sheet-grab { visibility: hidden; height: 0; margin-top: 4px; }
   #toasts, .conn { top: 72px; }
 }
+
+/* The usage and meeting lines on the Workers page. */
+.lite-strips { display: flex; flex-direction: column; gap: 6px; }
+.lite-strips:empty { display: none; }
+.lite-usage b { font-size: 13px; white-space: normal; }
+.lite-usage.near b { color: #b7791f; } .lite-usage.over b { color: var(--bad); }

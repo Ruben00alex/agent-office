@@ -64,7 +64,10 @@ const routes = new Map<string, { make: Factory; tab: Tab }>();
 let current: Screen | null = null;
 /** The path each tab was last on, so tapping a tab you left comes back where you were. */
 const lastIn = new Map<Tab, string>();
+/** How many pages deep this history entry is (kept in history.state, so the browser's own back and a reload agree with it). */
 let depth = 0;
+/** Set while go(…, true) swaps the entry in place, so the swap doesn't count as a page deeper. */
+let replacing = false;
 const badges = new Map<Tab, () => number>();
 
 export function route(name: string, tab: Tab, make: Factory) {
@@ -80,19 +83,29 @@ const pathOf = () => location.hash.replace(/^#\/?/, '') || 'workers';
 export function go(path: string, replace = false) {
   const next = `#/${path}`;
   if (location.hash === next) return render();
-  if (replace) location.replace(next);
-  else {
-    depth++;
-    location.hash = next;
-  }
+  if (replace) {
+    replacing = true;
+    location.replace(next);
+  } else location.hash = next;
 }
 
 /** Up one page: where you came from, or the tab's front page when this was opened directly. */
-export function back(fallback = 'workers') {
-  if (depth > 0) {
-    depth--;
-    history.back();
-  } else go(fallback, true);
+export function back(fallback?: string) {
+  if (depth > 0) history.back();
+  else go(fallback ?? routes.get(pathOf().split('/')[0])?.tab ?? 'workers', true);
+}
+
+/** The page changed by the address: work out how deep it is, and remember that in the history entry. */
+function navigated(initial = false) {
+  const state = history.state as { depth?: number } | null;
+  depth = typeof state?.depth === 'number' ? state.depth : initial ? 0 : replacing ? depth : depth + 1;
+  replacing = false;
+  try {
+    history.replaceState({ depth }, '');
+  } catch {
+    /* nothing to write to */
+  }
+  render();
 }
 
 export function currentPath(): string {
@@ -156,8 +169,8 @@ export function startRouter() {
       ),
     ),
   );
-  window.addEventListener('hashchange', render);
-  render();
+  window.addEventListener('hashchange', () => navigated());
+  navigated(true);
   foldableSidebar();
 }
 

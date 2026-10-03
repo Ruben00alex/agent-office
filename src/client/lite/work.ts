@@ -31,7 +31,7 @@ function views(active: View) {
       { id: 'issues', label: 'Issues', count: store.issues.items.filter((i) => i.state === 'OPEN').length },
       { id: 'pulls', label: 'PRs', count: store.pulls.items.filter((p) => p.state === 'OPEN').length },
       { id: 'queue', label: 'Queue', count: store.queue.tasks.filter((t) => t.status !== 'done').length },
-      { id: 'meeting', label: 'Meeting', count: store.meeting.current?.status === 'running' ? 1 : 0 },
+      { id: 'meeting', label: 'Meeting', count: store.meeting.current ? 1 : 0 },
     ],
     active,
     (v) => go(`work/${v}`, true),
