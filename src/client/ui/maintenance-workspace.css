@@ -34,11 +34,12 @@
 
 
 .lite-maintenance-workspace { display: contents; }
-.lite-maintenance-console { display: none; }
+/* Child selectors so these win over style.css's generic console rail whichever stylesheet loads last. */
+.lite-maintenance-workspace > .lite-maintenance-console { display: none; }
 @media (min-width: 961px) {
   .lite-maintenance-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, .8fr); height: 100%; min-height: 0; }
   .lite-maintenance-workspace > .lp-fill { min-width: 0; }
-  .lite-maintenance-console { display: flex; grid-column: auto; min-height: 0; overflow: hidden; border-left: 1px solid var(--line); border-top: 0; }
+  .lite-maintenance-workspace > .lite-maintenance-console { display: flex; grid-column: auto; min-height: 0; max-height: none; overflow: hidden; border-left: 1px solid var(--line); border-top: 0; }
   .lite-maintenance-console .maintenance-live-console { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
   .lite-maintenance-console .maintenance-console-host { flex: 1 1 0; height: auto; min-height: 90px; }
 }
@@ -128,34 +129,41 @@
 .lp-empty p { margin: 0; font-size: 13px; font-weight: 600; max-width: 34ch; }
 .lp-loading { display: grid; place-items: center; padding: 30px; }
 
-/* The kiosk surrounds the same workspace with an office sidebar. */
-.maintenance-chat:not(.product-chat) {
+/* The kiosk surrounds the same workspace with an office sidebar. Its selectors start with .modal so they
+   outrank style.css's older kiosk rules, since production may load that stylesheet after this one. */
+.modal.maintenance-chat:not(.product-chat) {
   --ink: #202938; --muted: #6b7484; --accent: #4564c7; --accent-soft: #eef2ff;
   --accent-line: #c7d2fe; --paper: #f7f8fb; --paper-2: #f0f3f7;
   --line: #e7eaf0; --line-2: #dce1e8; --gutter: 16px;
   --lift: 0 1px 3px #1118270f; --lift-2: 0 4px 16px #1118271a;
 }
-.maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: 160px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-.maintenance-chat .lite-maintenance-workspace { min-width: 0; min-height: 0; }
-.maintenance-chat .maintenance-chat-main { padding: 12px var(--gutter) 0; overflow: hidden; }
+.modal.maintenance-chat:not(.product-chat) .maintenance-chat-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.modal.maintenance-chat:not(.product-chat) .maintenance-chat-tools { margin-left: auto; }
+.modal.maintenance-chat:not(.product-chat) aside { overflow: hidden; }
+.modal.maintenance-chat:not(.product-chat) aside > button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modal.maintenance-chat:not(.product-chat) .maintenance-chat-archive { flex: 1 1 0; overscroll-behavior: contain; }
+.modal.maintenance-chat:not(.product-chat) .maintenance-conversation { padding: 6px 8px; margin: 2px 0; }
+.modal.maintenance-chat:not(.product-chat) .maintenance-conversation small { display: block; margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modal.maintenance-chat:not(.product-chat) .lite-maintenance-workspace { min-width: 0; min-height: 0; }
+.modal.maintenance-chat:not(.product-chat) .maintenance-chat-main { min-height: 0; max-height: none; padding: 12px var(--gutter) 0; overflow: hidden; }
 .maintenance-chat .maintenance-chat-messages { padding: 0; overflow: visible; flex: none; }
 .maintenance-chat .lp-msg { min-width: 0; }
 .maintenance-chat .lp-bubble { max-width: 100%; }
 .maintenance-chat .lp-bottom { margin-top: auto; }
 .maintenance-chat .lp-compose textarea { min-height: 44px; max-height: 140px; border-radius: 22px; }
 .maintenance-chat .lp-send { background: var(--accent); color: #fff; padding: 0; }
-.maintenance-chat:not(.product-chat) .lite-maintenance-console { overflow: hidden; }
-.maintenance-chat:not(.product-chat) .lite-maintenance-console .maintenance-live-console { flex: 1 1 0; min-height: 0; }
+.modal.maintenance-chat:not(.product-chat) .lite-maintenance-console .maintenance-live-console { flex: 1 1 0; min-height: 0; }
 .maintenance-chat .lp-actions:empty { display: none; }
 @media (max-width: 960px) {
-  .maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: 140px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .maintenance-chat .lite-maintenance-workspace { display: flex; flex-direction: column; }
+  .modal.maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: 150px minmax(0, 1fr); }
+  .modal.maintenance-chat:not(.product-chat) .lite-maintenance-workspace { display: flex; flex-direction: column; }
 }
 @media (max-width: 700px) {
-  .maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 160px minmax(0, 1fr); }
+  .modal.maintenance-chat:not(.product-chat) .maintenance-chat-layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 160px minmax(0, 1fr); }
+  .modal.maintenance-chat:not(.product-chat) aside { max-height: none; overflow: auto; }
+  .modal.maintenance-chat:not(.product-chat) aside > button { white-space: normal; }
+  .modal.maintenance-chat:not(.product-chat) .maintenance-chat-main { max-height: none; }
 }
 
 .lite-maintenance-console .maintenance-rail-stack { flex: 0 1 auto; min-height: 100px; max-height: 40%; overflow: auto; }
 .lite-maintenance-console .maintenance-rail-commit { flex: none; }
-.maintenance-chat:not(.product-chat) .maintenance-chat-main { overflow: hidden; }
-@media (min-width: 961px) { .maintenance-chat:not(.product-chat) .lite-maintenance-console { min-height: 0; } }

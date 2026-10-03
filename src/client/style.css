@@ -1470,7 +1470,6 @@ a.when:hover { text-decoration: underline; }
 
 /* Maintenance is an engineering workspace: backlog, conversation, review and real agent controls. */
 .modal.maintenance-chat { width: min(1680px, 96vw); height: 92dvh; max-height: 92dvh; display: flex; flex-direction: column; }
-.maintenance-chat-layout { grid-template-columns: 220px minmax(330px, 1fr) minmax(340px, .85fr); }
 .maintenance-chat aside { overflow: auto; }
 .maintenance-chat-archive { flex: 1; }
 .maintenance-tabs { display: flex; flex-shrink: 0; gap: 6px; padding: 12px 18px; border-bottom: 1px solid #e7eaf0; background: #fafbfc; }
@@ -1583,10 +1582,7 @@ a.when:hover { text-decoration: underline; }
 .maintenance-review-view .lp-row .txt { flex: 1; min-width: 0; }
 .maintenance-review-view .lp-row b, .maintenance-review-view .lp-row small { display: block; overflow-wrap: anywhere; }
 .maintenance-review-view .lp-note { color: #5b6573; font-size: 13px; }
-/* Keep kiosk scrolling inside its panels at every viewport size. */
-.maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: 160px minmax(280px, 1fr) minmax(300px, .85fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
-.maintenance-chat:not(.product-chat) .maintenance-console-rail { grid-column: auto; min-height: 0; border-left: 1px solid #e7eaf0; border-top: 0; overflow: auto; overscroll-behavior: contain; }
-.maintenance-chat:not(.product-chat) .maintenance-chat-main { min-height: 0; max-height: none; overflow: auto; overscroll-behavior: contain; }
+/* Keep kiosk scrolling inside its panels; the kiosk's grid itself lives in ui/maintenance-workspace.css. */
 .maintenance-chat:not(.product-chat) .maintenance-console,
 .maintenance-chat:not(.product-chat) .maintenance-live-console { flex: 1 0 150px; min-height: 0; }
 .maintenance-chat:not(.product-chat) .maintenance-console:not([open]) { flex: none; }
@@ -1594,16 +1590,6 @@ a.when:hover { text-decoration: underline; }
 .maintenance-chat:not(.product-chat) .maintenance-console::details-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .maintenance-rail-stack { flex: 0 1 auto; min-height: 120px; max-height: 50%; overflow: auto; overscroll-behavior: contain; grid-auto-rows: max-content; }
 .maintenance-chat-messages { min-height: 0; overscroll-behavior: contain; }
-@media (max-width: 960px) {
-  .maintenance-chat:not(.product-chat) .maintenance-chat-layout { grid-template-columns: 140px minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); }
-  .maintenance-chat:not(.product-chat) aside { grid-row: 1 / -1; }
-  .maintenance-chat:not(.product-chat) .maintenance-console-rail { grid-column: 2; border-top: 1px solid #e7eaf0; }
-}
-@media (max-width: 700px) {
-  .maintenance-chat:not(.product-chat) .maintenance-chat-layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, .4fr) repeat(2, minmax(0, 1fr)); }
-  .maintenance-chat:not(.product-chat) aside { grid-row: auto; max-height: none; }
-  .maintenance-chat:not(.product-chat) .maintenance-console-rail { grid-column: 1; border-left: 0; padding: 10px; }
-}
 
 /* Remote use is visible in both camera views; the normal target hint names the aimed object. */
 .remote-indicator {

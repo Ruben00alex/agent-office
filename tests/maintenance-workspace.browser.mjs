@@ -56,6 +56,15 @@ try {
     await page.evaluate(host => openHost(host), host);
     await page.getByRole('tab', { name: /💬 Chat/ }).click();
     await page.locator('[data-message="ready"]').waitFor();
+    if (host === '3d') {
+      // Production can load style.css after the workspace CSS; its old kiosk rules must not squeeze the workspace into a column.
+      await page.addStyleTag({ url: '/style.css?direct' });
+      const fill = await page.evaluate(() => {
+        const box = el => document.querySelector(el).getBoundingClientRect();
+        return { layout: box('.maintenance-chat-layout').right, workspace: box('.lite-maintenance-workspace').right };
+      });
+      assert.ok(Math.abs(fill.layout - fill.workspace) < 2, `workspace fills the kiosk: ${JSON.stringify(fill)}`);
+    }
     assert.equal(await input.inputValue(), host === '3d' ? 'Migrated kiosk draft' : 'Shared draft from 3d');
     assert.equal(await page.getByRole('button', { name: 'Remove draft.png', exact: true }).count(), 1);
     await input.fill(`Shared draft from ${host}`);

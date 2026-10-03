@@ -97,7 +97,10 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
   input.value = initial;
   const grow = () => {
     input.style.height = 'auto';
-    input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
+    // scrollHeight leaves out the border, which a border-box height must include or the box scrolls by a pixel or two.
+    const needed = input.scrollHeight + input.offsetHeight - input.clientHeight;
+    input.style.height = `${Math.min(needed, 140)}px`;
+    input.style.overflowY = needed > 140 ? 'auto' : 'hidden';
   };
   const images = maintenance ? imageComposer(() => (saveDraft(), tray(), controls()), (t) => showError(t)) : null;
   const tray = () => images?.element.classList.toggle('hidden', !trayOpen && !images.images.length);
