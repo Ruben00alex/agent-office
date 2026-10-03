@@ -306,7 +306,7 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
     images?.disable(input.disabled);
     sendBtn.disabled = input.disabled || !!images?.uploading || (waiting && !model.edited()) || (newConversation && busy) || state?.stack?.phase === 'shipping' || state?.stack?.validation?.phase === 'running';
     const say = newConversation
-      ? waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯ before starting a new conversation.` : busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'New conversation: the earlier ones stay in History.'
+      ? waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯${maintenance ? '' : ', or End the session to start fresh'}.` : busy ? (maintenance ? 'Wait for the current reply to finish before starting a new conversation.' : 'Use End the session in ⋯ to stop the reply and start fresh.') : 'New conversation: the earlier ones stay in History.'
       : archived ? 'An earlier conversation, read-only. Open History to go back to the current one.'
         : waiting ? `${cfg.name} is waiting for an answer or approval. Open its terminal from ⋯ to respond.`
           : state && !state.richReplies ? 'This provider replies in its terminal; your messages are still kept here.'
@@ -487,7 +487,7 @@ export function agentWorkspace(kind: 'maintenance' | 'product', host: AgentWorks
       { icon: '🖥️', label: 'Open its terminal', sub: 'Answer a permission prompt, watch it work', hidden: !(state?.worker && state.floor), run: () => state?.worker && state.floor && host.terminal(state.worker, state.floor) },
       { icon: '🧠', label: 'Runs on…', sub: 'Move it to another model', run: openRunsOn },
       { icon: '💡', label: 'Capture an idea as an issue', hidden: !maintenance, run: () => openMaintenanceIssueCreate(() => net.send({ t: 'maintenance.issues' })) },
-      { icon: '⏏️', label: 'End the session', sub: 'Stops it for everyone; history and stacked commits stay', danger: true, hidden: !(maintenance && state?.worker), run: () => state?.worker && confirmDialog('End Maintenance session?', 'Stops the active session for everyone, including unfinished work. Conversation history, edited files and stacked commits remain.', 'End session', () => net.send({ t: 'worker.kill', workerId: state!.worker!.id })) },
+      { icon: '⏏️', label: 'End the session', sub: maintenance ? 'Stops it for everyone; history and stacked commits stay' : 'Stops it for everyone; conversation history stays', danger: true, hidden: !state?.worker, run: () => { const worker = state?.worker; if (worker) confirmDialog(`End ${cfg.name} session?`, 'Stops the active session for everyone, including unfinished replies. Earlier conversations remain in History.', 'End session', () => { net.send({ t: 'worker.kill', workerId: worker.id }); if (!maintenance) pick(undefined, true); }); } },
     ],
     dispose: () => {
       saveDraft();

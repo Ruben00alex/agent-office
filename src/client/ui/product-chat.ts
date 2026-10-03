@@ -3,6 +3,7 @@ import { fullPlanWindow } from '../../shared/protocol';
 import { PRODUCT_DESK } from '../../shared/layout';
 import { store } from '../state';
 import { h, openModal } from './dom';
+import { confirmDialog } from './prompt';
 import { maintenanceContent, marqueeTitle } from './maintenance-chat';
 import { generateTitleButton, maintenanceJson } from './maintenance-board';
 import { providerPicker, workerChoice } from './provider';
@@ -54,6 +55,14 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
   const submit = h('button.maintenance-send', { type: 'submit' }, 'Send');
   const retitle = generateTitleButton('/api/product/chat-title', () => state?.conversation?.id, () => void refresh(), (m) => showError(m));
   const terminal = h('button', { type: 'button', onclick: () => { if (state?.worker) { modal.close(); watch(state.worker); } } }, 'Open terminal');
+  const end = h('button', { type: 'button', onclick: () => {
+    const worker = state?.worker;
+    if (!worker) return;
+    confirmDialog('End Product Lead session?', 'Stops the active session for everyone, including unfinished replies. Earlier conversations remain in history.', 'End session', () => {
+      send({ t: 'worker.kill', workerId: worker.id });
+      create.click();
+    });
+  } }, 'End session');
   const current = h('button.maintenance-current', { type: 'button', onclick: () => { saveDraft(); newConversation = false; selected = undefined; loadedDraft = ''; messageKey = ''; messages = []; void refresh(); } }, 'Current conversation');
   const create = h('button.maintenance-new', { type: 'button', onclick: () => {
     saveDraft(); newConversation = true; selected = undefined; loadedDraft = ''; messages = []; messageKey = ''; showError(''); void refresh().then(() => input.focus());
@@ -66,7 +75,7 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
   const el = h('div.modal.maintenance-chat.product-chat', { role: 'dialog', 'aria-label': 'Chat with the Product Lead' },
     h('header', {}, h('div', {}, h('span.maintenance-experiment', {}, 'AGENT OFFICE · PRODUCT'), h('h2', {}, '🧭 Product Lead'), status),
       conversationTitle,
-      h('div.maintenance-chat-tools', {}, retitle, terminal, close)),
+      h('div.maintenance-chat-tools', {}, retitle, terminal, end, close)),
     h('div.maintenance-chat-layout', {},
       h('aside', {}, create, current, h('h3', {}, 'Past conversations'), h('small', {}, 'Shared with everyone on this floor'), search, archive),
       h('section.maintenance-chat-main', {}, older, list, model.element, form)));
@@ -116,10 +125,11 @@ export function openProductChat(send: (message: ClientMsg) => void, watch: (work
     const activeTitle = newConversation ? 'New conversation' : state?.conversations.find(c => c.id === (selected ?? worker?.id))?.title ?? '';
     if (conversationTitle.title !== activeTitle) { conversationTitle.title = activeTitle; conversationTitle.textContent = activeTitle; }
     terminal.disabled = !worker;
+    end.disabled = !worker || !!pending;
     create.disabled = !!pending;
     input.disabled = !!pending || archived || !state || historyFailed;
     submit.disabled = input.disabled || (waiting && !model.edited() && !spent) || (newConversation && busy);
-    note.textContent = newConversation ? (busy ? 'Wait for the current reply to finish before starting a new conversation.' : 'A fresh start: the earlier conversations stay in the list.')
+    note.textContent = newConversation ? (busy ? 'End the current session to stop its reply and start a new conversation.' : 'A fresh start: the earlier conversations stay in the list.')
       : archived ? 'An earlier conversation, read-only. Choose Current conversation to carry on talking.'
       : waiting ? 'The Product Lead is waiting for an answer or an approval. Open its terminal to respond.'
       : state && !state.richReplies ? 'This provider replies in its terminal; your messages are still kept here.'
